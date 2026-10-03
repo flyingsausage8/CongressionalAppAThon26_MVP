@@ -1,12 +1,12 @@
 {
   "id": "the-quiet-door",
   "title": "The Quiet Door",
-  "blurb": "A tinker, a company of exiles, and a mountain hall nobody has opened in eighty years.",
-  "you": "You are Pim Thistledown of Nettle Hollow - a burrow-dweller, a gardener, a person of regular meals and no ambitions whatsoever. You have never been further than the market road, and you would like to keep it that way.",
-  "setup": "Last night a wandering tinker called Alvard Mund scratched a mark on your round front door, and this morning a company of exiled mountain folk arrived expecting breakfast. They are going home - to a hall under a mountain their grandparents fled in a single night, eighty years ago. They need someone small, quiet and quick-fingered, and Alvard has told them that is you. Nobody has set foot in that hall since. Nobody who left will say what they were running from; they only call it the Tenant. The strangest part, and the part the company does not like discussed: the great doors were locked from the inside.",
-  "goal": "Get to the mountain hall with the company, get through the quiet door, and find out what is actually in there - and whether going home is still possible.",
-  "opening": "Your kitchen, far too full of strangers, and a contract on the table that you have not signed yet.",
-  "tone": "Cosy adventure that grows larger than expected. Fond humour about food, comfort and reluctance. Wonder rather than horror - whatever is under the mountain, the story stays warm.",
+  "blurb": "Strangers at your breakfast table want you to open a mountain door that was locked from the inside.",
+  "you": "You are a gardener. You live in a warm house dug into a green hill, you like three meals a day, and you have never been further than the market road. You would like to keep it that way.",
+  "setup": "This morning four strangers walked into your kitchen and ate your breakfast. They want you to come with them. Their families lived in a great hall inside a mountain. Eighty years ago they all ran out of it in one night, and nobody has been back since. Now they are going home. They need someone small and quiet who is good with their hands, and Alvard says that is you. There is one thing they do not like talking about: the big doors were locked from the inside. So somebody stayed in there.",
+  "goal": "Walk to the mountain with them, get the door open, and find out what is inside.",
+  "opening": "Your kitchen, far too full of strangers, with a paper on the table you have not signed.",
+  "tone": "A cosy adventure that gets bigger than anyone expected. Warm jokes about food and comfort. Surprising, never frightening. Whatever is in the mountain, the story stays kind.",
   "softTurns": 14,
   "maxTurns": 22,
   "cast": {
@@ -18,21 +18,21 @@
     },
     "alvard": {
       "voice": "onyx",
-      "style": "Very deep, very slow, dry as old paper. Long pauses. Amused by almost everything.",
-      "bio": "A wandering tinker who mends pots, knows far too much, and answers questions with other questions. He chose you and has not explained why. Old enough that 'eighty years ago' sounds recent to him.",
-      "condition": "Unhurried. Entirely at ease, which is somehow not reassuring."
+      "style": "Very deep and very slow. Dry and amused. Leaves a pause before the important word.",
+      "bio": "An old travelling tinker who mends pots and knows far too much. He picked you, and he will not say why. He is old enough that eighty years ago sounds like last week to him.",
+      "condition": "Calm. Far too relaxed about all of this."
     },
     "hesta": {
       "voice": "coral",
-      "style": "Bright, high, clipped and fast. Proud. No patience for dithering.",
-      "bio": "Captain of the company and heir to the lost hall, born in exile and raised on the story of it. Competent, impatient, and privately terrified that the home she has been promised her whole life will turn out to be nothing much.",
-      "condition": "Impatient to be moving. Boots already on."
+      "style": "Bright and direct. Proud. Speaks clearly and never rushes her words.",
+      "bio": "She leads the group, and the mountain hall should have been hers. She was born after they fled and grew up on stories about it. She is good at this, and secretly afraid that home will turn out to be a disappointment.",
+      "condition": "Ready to leave. Boots already on."
     },
     "yarrow": {
       "voice": "ash",
-      "style": "Quick, theatrical, cheerful, never stops talking. Delighted by everything.",
-      "bio": "The company's scout and worst-kept secret. Friendly to a fault, hopeless at keeping a confidence, and the only one willing to say out loud what everyone else is thinking. Genuinely good on a cliff.",
-      "condition": "Bright-eyed and already eating something."
+      "style": "Cheerful and lively, but clear and easy to follow. Never gabbles.",
+      "bio": "The group's scout. Friendly, terrible at keeping secrets, and the only one who will say out loud what everyone is thinking. Genuinely brilliant on a cliff.",
+      "condition": "Happy, and already eating something."
     }
   },
   "extras": [
@@ -44,7 +44,7 @@
     {
       "id": "voice_b",
       "voice": "nova",
-      "style": "Quick, bright, young and sharp."
+      "style": "Bright and young, but clear and unhurried."
     },
     {
       "id": "voice_c",
@@ -54,10 +54,10 @@
     {
       "id": "voice_d",
       "voice": "verse",
-      "style": "Light, lyrical, a touch odd."
+      "style": "Light and lyrical, with clear words."
     }
   ],
   "props": {
-    "the contract": "Unsigned, on your kitchen table, in very small writing."
+    "the paper": "Not signed yet. On your kitchen table, in very small writing."
   }
 }

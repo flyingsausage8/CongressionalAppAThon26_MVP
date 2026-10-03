@@ -18,13 +18,13 @@
     },
     "odo": {
       "voice": "cedar",
-      "style": "Deep, dry, gravelly. Grumbles constantly. Long pauses. Secretly having the time of his life.",
+      "style": "Deep, dry and gravelly, but every word clear. Grumbles constantly. Long pauses. Secretly having the time of his life.",
       "bio": "Thirty years a courier, retired two years and bored out of his mind. Knew the dead woman. Knows every road north and every person worth avoiding. Will not admit that his knee is finished, or that he is frightened.",
       "condition": "Road-worn, knee aching, pretending otherwise."
     },
     "wren": {
       "voice": "nova",
-      "style": "Quick, bright, young, a little too casual. Talks fast when she is lying.",
+      "style": "Bright, young and a little too casual. Clear and well-paced, even when she is lying.",
       "bio": "Joined the road a day out and has been useful ever since - too useful. She can get into anywhere, and she knows exactly what the egg is worth to the wrong people. Whether she came to steal it is a question she has not settled with herself yet.",
       "condition": "Alert, travelling light, keeping her distance from Odo."
     }
@@ -38,12 +38,12 @@
     {
       "id": "voice_b",
       "voice": "coral",
-      "style": "Bright, high, warm and quick."
+      "style": "Bright, high and warm. Clear and unhurried."
     },
     {
       "id": "voice_c",
       "voice": "ash",
-      "style": "Fast, theatrical, pleased with itself."
+      "style": "Lively and theatrical, pleased with itself, but every word clear."
     },
     {
       "id": "voice_d",
