@@ -13,7 +13,7 @@ const ui = {
 
 const IDLE_MS = 25000;       // hands-on mode: how long before we prod you
 const ANSWER_MS = 5000;      // driver mode: how long a question waits before we ask again
-const SETTLE_MS = 1300;      // driver mode: silence that means "they have finished talking"
+const SETTLE_MS = 700;       // driver mode: silence that means "they have finished talking"
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
 let storyOver = false;
@@ -163,17 +163,28 @@ function driverHeard(text, final, startMs) {
       queue.pause();
       driver.phase = 'paused';
       driverHint('Paused \u2014 say \u201cresume\u201d', 'err');
+    } else if (final) {
+      micReport('dropped', `while story talking: "${text}"`);
     }
     return;                                  // no barge-in: the story keeps its floor
   }
 
-  if (driver.phase !== 'answering') return;
+  if (driver.phase !== 'answering') {
+    if (final) micReport('dropped', `phase ${driver.phase}: "${text}"`);
+    return;
+  }
 
   if (final) {
-    if (overlapped) return;
+    if (overlapped) {
+      micReport('dropped', `overlapped the speakers: "${text}"`);
+      return;
+    }
     // Fallback for when the recogniser gives us no timings: a result that lands right as
     // the speakers stop, made of their words, is the tail of their line.
-    if (Date.now() - driver.quietSince < 600 && isEchoOfTurn(text)) return;
+    if (Date.now() - driver.quietSince < 600 && isEchoOfTurn(text)) {
+      micReport('dropped', `echo of the characters: "${text}"`);
+      return;
+    }
   }
 
   clearTimeout(driver.wait);                 // they are speaking, so stop counting down
@@ -196,6 +207,7 @@ function driverHeard(text, final, startMs) {
       driver.urges = 0;
       say(answer);
     } else {
+      micReport('dropped', `nothing but filler: "${answer}"`);
       driverHint('Didn\u2019t catch that', 'err');
       driver.wait = setTimeout(urgeAgain, 1500);
     }
@@ -535,6 +547,10 @@ async function initSpeech() {
   const SDK = window.SpeechSDK;
   speechCfg = SDK.SpeechConfig.fromAuthorizationToken(token, region);
   speechCfg.speechRecognitionLanguage = 'en-US';
+  // Decide a sentence has ended sooner than the default, so answers are acted on quickly.
+  try {
+    speechCfg.setProperty(SDK.PropertyId.Speech_SegmentationSilenceTimeoutMs, '500');
+  } catch { /* older SDK, the default is fine */ }
   // refresh before the 10-minute token expires
   setInterval(async () => {
     try {
@@ -579,6 +595,8 @@ async function startAlwaysListening() {
     driver.lastEventAt = Date.now();
     if (e.result.reason === SDK.ResultReason.RecognizedSpeech && e.result.text) {
       driverHeard(e.result.text, true, startOf(e));
+    } else if (e.result.reason === SDK.ResultReason.NoMatch) {
+      micReport('no-match', `phase ${driver.phase}`);     // heard sound, made no words of it
     }
   };
   recognizer.speechStartDetected = () => { driver.lastEventAt = Date.now(); };

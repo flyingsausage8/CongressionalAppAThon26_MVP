@@ -11,8 +11,8 @@
   "maxTurns": 14,
   "cast": {
     "narrator": {
-      "voice": "ballad",
-      "style": "Soft, lilting storyteller. Unhurried, fond of the tale. Like someone reading a picture book aloud.",
+      "voice": "fable",
+      "style": "Clear, warm audiobook narrator. Well-projected and easy to follow at speed, with crisp consonants and real energy. Never soft, sleepy or lilting.",
       "bio": "Tells the story of the forest, the path, and the light through the leaves. Speaks to the listener as 'you'. Describes the world, never your choices.",
       "condition": "Steady."
     },
@@ -36,10 +36,26 @@
     }
   },
   "extras": [
-    { "id": "voice_a", "voice": "sage", "style": "Calm, level, measured." },
-    { "id": "voice_b", "voice": "nova", "style": "Quick, bright, young." },
-    { "id": "voice_c", "voice": "cedar", "style": "Deep, weathered, kind." },
-    { "id": "voice_d", "voice": "verse", "style": "Light, lyrical, a touch odd." }
+    {
+      "id": "voice_a",
+      "voice": "sage",
+      "style": "Calm, level, measured."
+    },
+    {
+      "id": "voice_b",
+      "voice": "nova",
+      "style": "Quick, bright, young."
+    },
+    {
+      "id": "voice_c",
+      "voice": "cedar",
+      "style": "Deep, weathered, kind."
+    },
+    {
+      "id": "voice_d",
+      "voice": "verse",
+      "style": "Light, lyrical, a touch odd."
+    }
   ],
   "props": {
     "the basket": "Bread, a jar of honey, and medicine. Heavier than it looks."

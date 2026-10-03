@@ -12,7 +12,7 @@
   "cast": {
     "narrator": {
       "voice": "fable",
-      "style": "Storybook warmth. Expressive, well-paced, fond of the small details - kettles, boots, weather, hills.",
+      "style": "Clear, warm audiobook narrator. Well-projected and easy to follow at speed, with crisp consonants and real energy. Never soft, sleepy or lilting.",
       "bio": "Tells the tale of the road and the country it crosses. Speaks to the listener as 'you'. Describes the world and what happens in it, never what you decide.",
       "condition": "Steady."
     },
@@ -36,10 +36,26 @@
     }
   },
   "extras": [
-    { "id": "voice_a", "voice": "cedar", "style": "Deep, weathered, slow and kind." },
-    { "id": "voice_b", "voice": "nova", "style": "Quick, bright, young and sharp." },
-    { "id": "voice_c", "voice": "sage", "style": "Calm, level, measured and thoughtful." },
-    { "id": "voice_d", "voice": "verse", "style": "Light, lyrical, a touch odd." }
+    {
+      "id": "voice_a",
+      "voice": "cedar",
+      "style": "Deep, weathered, slow and kind."
+    },
+    {
+      "id": "voice_b",
+      "voice": "nova",
+      "style": "Quick, bright, young and sharp."
+    },
+    {
+      "id": "voice_c",
+      "voice": "sage",
+      "style": "Calm, level, measured and thoughtful."
+    },
+    {
+      "id": "voice_d",
+      "voice": "verse",
+      "style": "Light, lyrical, a touch odd."
+    }
   ],
   "props": {
     "the contract": "Unsigned, on your kitchen table, in very small writing."

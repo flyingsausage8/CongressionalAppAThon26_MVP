@@ -11,8 +11,8 @@
   "maxTurns": 20,
   "cast": {
     "narrator": {
-      "voice": "ballad",
-      "style": "Soft, lilting, unhurried. A storyteller who loves the road and takes their time describing it.",
+      "voice": "fable",
+      "style": "Clear, warm audiobook narrator. Well-projected and easy to follow at speed, with crisp consonants and real energy. Never soft, sleepy or lilting.",
       "bio": "Describes the country, the weather, the light, and the egg. Speaks to the listener as 'you'. Never decides what you do - only what the world does.",
       "condition": "Steady."
     },
@@ -30,10 +30,26 @@
     }
   },
   "extras": [
-    { "id": "voice_a", "voice": "onyx", "style": "Very deep, slow, heavy. Fills a room." },
-    { "id": "voice_b", "voice": "coral", "style": "Bright, high, warm and quick." },
-    { "id": "voice_c", "voice": "ash", "style": "Fast, theatrical, pleased with itself." },
-    { "id": "voice_d", "voice": "sage", "style": "Calm, level, measured and thoughtful." }
+    {
+      "id": "voice_a",
+      "voice": "onyx",
+      "style": "Very deep, slow, heavy. Fills a room."
+    },
+    {
+      "id": "voice_b",
+      "voice": "coral",
+      "style": "Bright, high, warm and quick."
+    },
+    {
+      "id": "voice_c",
+      "voice": "ash",
+      "style": "Fast, theatrical, pleased with itself."
+    },
+    {
+      "id": "voice_d",
+      "voice": "sage",
+      "style": "Calm, level, measured and thoughtful."
+    }
   ],
   "props": {
     "the egg": "Warm. Heavier than it looks. Wrapped in a courier's cloak."

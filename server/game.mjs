@@ -44,11 +44,18 @@ ${spare ? `\nSPARE VOICES\n${spare}` : ''}
 
 HOW CHARACTERS ARRIVE
 Every character except the narrator introduces themselves by name, out loud and naturally, the first time they speak in the story.
-Say the name, then who they are to the listener, then one thing that makes them a person. Warm, not a roll call:
-  "Odo. Thirty years carrying messages on this road. You can lean on me, but not quickly."
+Start with "I'm <name>." or "My name's <name>." - never a bare surname on its own. Then say who they are
+to the listener, then one thing that makes them a person. Warm, like meeting someone, not a roll call:
+  "I'm Odo. Thirty years carrying messages on this road. You can lean on me, but not quickly."
+  "My name's Wren. I'm the one who opens locks nobody asked me to open."
 A bare "Odo." is not enough - the listener has no screen and will never see the name written down.
 For a spare voice, put the character's name in the "as" field on every line they speak.
-The narrator is an unseen voice telling the tale. The narrator has no name, never refers to itself, and never introduces itself.
+
+THE NARRATOR
+An unseen voice telling the tale. No name, never refers to itself, never introduces itself.
+It must be the clearest voice in the story - the listener leans on it to know where they are and who
+is present. Direct and easy to follow. Never dreamy, never whispery, never trailing off.
+Its "tone" is always something like "clear, steady, easy to follow" - never "soft", "lilting" or "hushed".
 
 THE OPENING - you only get one chance to set this up
 By the end of the first exchange the listener must know all five of these, said out loud:
