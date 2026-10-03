@@ -33,6 +33,7 @@ const driver = {
   quietSince: 0,    // when the speakers actually went silent
   lastPlayEnd: 0,   // wall clock of the last audio frame we played
   micT0: 0,         // wall clock of when the recogniser session started
+  utterStart: 0,    // wall clock of when the current run of speech began
   lastEventAt: 0,   // last sign of life from the microphone
   stream: null,     // the live microphone track, so we can tell if it really died
   settle: null,
@@ -70,8 +71,17 @@ function isEcho(text) {
 }
 
 /** Same idea, but against everything the characters have said so far this turn. */
+function normWords(s) {
+  return String(s)
+    .toLowerCase()
+    .replace(/[\u2018\u2019]/g, "'")          // curly apostrophes, which the recogniser likes
+    .replace(/[^a-z0-9' ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function isEchoOfTurn(text) {
-  const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const norm = normWords;
   const t = norm(text);
   if (!t) return true;
 
@@ -86,6 +96,20 @@ function isEchoOfTurn(text) {
   const have = new Set(blob.split(' '));
   const hits = words.filter((w) => have.has(w)).length;
   return hits / words.length >= 0.7;
+}
+
+/** Cut the characters' own words off the front of something the mic heard. */
+function stripEcho(text) {
+  const blob = ' ' + normWords(spokenThisTurn.join(' ')) + ' ';
+  const words = normWords(text).split(' ').filter(Boolean);
+  if (blob.trim() === '' || !words.length) return normWords(text);
+
+  // Longest run from the start that the characters actually said. Checked longest-first so
+  // a real answer that merely repeats an option word is not mistaken for the whole echo.
+  for (let n = Math.min(words.length, 30); n >= 1; n--) {
+    if (blob.includes(' ' + words.slice(0, n).join(' ') + ' ')) return words.slice(n).join(' ');
+  }
+  return words.join(' ');
 }
 
 function driverHint(text, cls = '') {
@@ -121,6 +145,7 @@ function driverAwaitAnswer() {
   driver.sawInterim = false;
   driver.heardSound = false;
   driver.peak = 0;
+  driver.utterStart = 0;
 
   if (driver.pending) {                      // they answered while an urge was in flight
     const held = driver.pending;
@@ -148,10 +173,16 @@ function urgeAgain() {
 function driverHeard(text, final, startMs) {
   if (!driver.on || !text.trim()) return;
 
-  // Did this speech begin while the characters were still sounding? If so it belongs to
-  // the telling phase - it is either the speakers bleeding into the mic, or words we have
-  // already decided to ignore. Either way it is never an answer.
-  const overlapped = startMs ? startMs < driver.lastPlayEnd - 150 : queue.playing && !queue.paused;
+  // Wall clock of when this run of speech began. The recogniser's own offsets drift over a
+  // long session, so we trust the moment the first interim result arrived instead.
+  if (!driver.utterStart) driver.utterStart = Date.now();
+  const began = driver.utterStart;
+  if (final) driver.utterStart = 0;
+
+  // Did this speech begin while the characters were still sounding? Then it starts with
+  // the speakers bleeding into the microphone, whatever else it may also contain.
+  const overlapped = began < driver.lastPlayEnd + 250
+    || (startMs ? startMs < driver.lastPlayEnd - 150 : queue.playing && !queue.paused);
 
   if (driver.phase === 'paused') {
     if (final && isCommand(text, GO_WORDS)) {
@@ -178,17 +209,17 @@ function driverHeard(text, final, startMs) {
     return;
   }
 
-  if (final) {
-    if (overlapped) {
-      micReport('dropped', `overlapped the speakers: "${text}"`);
-      return;
-    }
-    // Fallback for when the recogniser gives us no timings: a result that lands right as
-    // the speakers stop, made of their words, is the tail of their line.
-    if (Date.now() - driver.quietSince < 600 && isEchoOfTurn(text)) {
+  if (final && overlapped) {
+    // The characters' tail and the answer often arrive glued into one result, like
+    // "Which do you choose? Let's go forward." Cut their words off the front and keep
+    // whatever is left - throwing the whole thing away loses a real answer.
+    const kept = stripEcho(text);
+    if (!isRealAnswer(kept)) {
       micReport('dropped', `echo of the characters: "${text}"`);
       return;
     }
+    if (kept !== text.trim()) micReport('trimmed', `"${text}" -> "${kept}"`);
+    text = kept;
   }
 
   clearTimeout(driver.wait);                 // they are speaking, so stop counting down

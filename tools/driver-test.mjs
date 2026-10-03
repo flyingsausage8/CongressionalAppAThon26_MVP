@@ -11,11 +11,11 @@ const cut = (from, to) => {
 
 const block =
   cut('const STOP_WORDS', 'function driverHint') +
-  '\nreturn { isRealAnswer, isCommand, isEcho, isEchoOfTurn, STOP_WORDS, GO_WORDS };';
+  '\nreturn { isRealAnswer, isCommand, isEcho, isEchoOfTurn, stripEcho, STOP_WORDS, GO_WORDS };';
 
 const queue = { paused: false, nowText: '', playing: false };
 const spokenThisTurn = [];
-const { isRealAnswer, isCommand, isEcho, isEchoOfTurn, STOP_WORDS, GO_WORDS } =
+const { isRealAnswer, isCommand, isEcho, isEchoOfTurn, stripEcho, STOP_WORDS, GO_WORDS } =
   new Function('queue', 'spokenThisTurn', block)(queue, spokenThisTurn);
 
 let fails = 0;
@@ -85,6 +85,27 @@ console.log('\nknown and accepted: short answers reusing the question\'s words')
 for (const t of ['the gate', 'take the gate', 'circle through the fields']) {
   console.log(`  note  ${JSON.stringify(t)} looks like echo (${isEchoOfTurn(t)}) - caught by timing instead`);
 }
+spokenThisTurn.length = 0;
+
+// Verbatim from transcripts/2026-10-03T06-18-02-the-quiet-door.md, where the speakers' tail
+// and the real answer arrived glued into a single recognition result.
+console.log('\ncutting the characters off the front of a real answer');
+spokenThisTurn.length = 0;
+spokenThisTurn.push(
+  'Alvard reaches the broken gap and holds out his empty pot.',
+  'Jump the gap now.',
+  'Or climb down and save your food.',
+  'Which do you choose?',
+);
+check(
+  'glued echo + answer keeps only the answer',
+  stripEcho('Which do you choose? Uh, let\u2019s just go forward.'),
+  'uh let\'s just go forward',
+);
+check('pure echo leaves nothing', isRealAnswer(stripEcho('Which do you choose?')), false);
+check('pure echo of a story line leaves nothing', isRealAnswer(stripEcho('Jump the gap now.')), false);
+check('a real answer survives untouched', stripEcho('I want to go back for the pen'), 'i want to go back for the pen');
+check('answer reusing option words survives', stripEcho('jump the gap but hold the rope'), 'but hold the rope');
 spokenThisTurn.length = 0;
 
 console.log(fails ? `\n${fails} FAILED` : '\nPASS - all driver-mode checks');
