@@ -8,14 +8,158 @@ const ui = {
   progress: $('progress'), restart: $('restartBtn'),
   sceneNow: $('sceneNow'), conditions: $('conditions'), facts: $('facts'),
   savesWrap: $('savesWrap'), saveList: $('saveList'),
+  driverToggle: $('driverMode'), driverBar: $('driverBar'), driverHint: $('driverHint'),
 };
 
-const IDLE_MS = 25000;
+const IDLE_MS = 25000;       // hands-on mode: how long before we prod you
+const ANSWER_MS = 5000;      // driver mode: how long a question waits before we ask again
+const SETTLE_MS = 1300;      // driver mode: silence that means "they have finished talking"
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
 let storyOver = false;
 let chosenStory = null;
 let resumeId = null;
+
+/* ---------------- driver mode: hands free, mic always open ---------------- */
+
+const driver = {
+  on: false,
+  phase: 'idle',    // idle | telling | answering | paused
+  buffer: '',
+  pending: '',      // an answer that arrived while we were still talking
+  settle: null,
+  wait: null,
+  urges: 0,
+};
+
+const STOP_WORDS = /\b(stop|pause|wait|hold on|quiet|shush)\b/i;
+const GO_WORDS = /\b(resume|continue|carry on|keep going|go on|unpause|play|go ahead)\b/i;
+const FILLER = /^(u+m+|u+h+|e+r+|h+m+|m+h*|a+h+|o+h+|well|like|so|erm)$/i;
+
+/** Did they actually say something, or just make a noise? */
+function isRealAnswer(text) {
+  const words = String(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9' ]+/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w && !FILLER.test(w));
+  return words.length > 0;
+}
+
+/** A command only counts if it was said on its own - stops characters triggering it. */
+function isCommand(text, re) {
+  const t = String(text).trim().replace(/[.!?,]+$/, '');
+  if (t.split(/\s+/).length > 3 || !re.test(t)) return false;
+  return !isEcho(t);
+}
+
+/** The mic hears the speakers too. If the words are in the line being played, ignore them. */
+function isEcho(text) {
+  if (queue.paused) return false;               // nothing is sounding, so nothing can echo
+  const now = (queue.nowText || '').toLowerCase().replace(/[^a-z0-9' ]+/g, ' ');
+  if (!now) return false;
+  return now.includes(String(text).toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').trim());
+}
+
+function driverHint(text, cls = '') {
+  ui.driverHint.textContent = text;
+  ui.driverBar.className = 'driverBar ' + cls;
+}
+
+function clearAnswerTimers() {
+  clearTimeout(driver.settle);
+  clearTimeout(driver.wait);
+  driver.settle = null;
+  driver.wait = null;
+}
+
+/** The story is talking. Nothing you say matters except "stop". */
+function driverTelling() {
+  if (!driver.on) return;
+  // An answer that landed while an urge was already in flight must not be thrown away.
+  if (driver.phase === 'answering' && isRealAnswer(driver.buffer)) driver.pending = driver.buffer.trim();
+  clearAnswerTimers();
+  driver.phase = 'telling';
+  driver.buffer = '';
+  driverHint('Say \u201cstop\u201d to pause');
+}
+
+/** A question has just landed. Wait, then ask again if nothing comes back. */
+function driverAwaitAnswer() {
+  if (!driver.on || storyOver) return;
+  clearAnswerTimers();
+  driver.phase = 'answering';
+  driver.buffer = '';
+
+  if (driver.pending) {                      // they did answer - we just talked over them
+    const held = driver.pending;
+    driver.pending = '';
+    driver.urges = 0;
+    say(held);
+    return;
+  }
+
+  driverHint('Your turn \u2014 just say it', 'live');
+  driver.wait = setTimeout(urgeAgain, ANSWER_MS);
+}
+
+function urgeAgain() {
+  if (!driver.on || driver.phase !== 'answering' || storyOver) return;
+  if (ws?.readyState !== WebSocket.OPEN) return;
+  driver.urges++;
+  driverHint('Still with us?', 'think');
+  ws.send(JSON.stringify({ t: 'idle', level: driver.urges }));
+}
+
+/** Everything the mic hears while driver mode is on comes through here. */
+function driverHeard(text, final) {
+  if (!driver.on || !text.trim()) return;
+
+  if (driver.phase === 'paused') {
+    if (final && isCommand(text, GO_WORDS)) {
+      queue.resume();
+      driver.phase = 'telling';
+      driverHint('Say \u201cstop\u201d to pause');
+    }
+    return;
+  }
+
+  if (driver.phase === 'telling') {
+    if (final && isCommand(text, STOP_WORDS)) {
+      queue.pause();
+      driver.phase = 'paused';
+      driverHint('Paused \u2014 say \u201cresume\u201d', 'err');
+    }
+    return;                                  // no barge-in: the story keeps its floor
+  }
+
+  if (driver.phase !== 'answering') return;
+
+  clearTimeout(driver.wait);                 // they are speaking, so stop counting down
+  driver.wait = null;
+
+  if (!final) {
+    ui.heard.textContent = (driver.buffer + ' ' + text).trim();
+    return;
+  }
+
+  driver.buffer = (driver.buffer + ' ' + text).trim();
+  ui.heard.textContent = driver.buffer;
+
+  clearTimeout(driver.settle);
+  driver.settle = setTimeout(() => {
+    const answer = driver.buffer.trim();
+    driver.buffer = '';
+    if (isRealAnswer(answer)) {
+      driver.urges = 0;
+      driverTelling();
+      say(answer);
+    } else {
+      driverHint('Didn\u2019t catch that', 'err');
+      driver.wait = setTimeout(urgeAgain, 1500);
+    }
+  }, SETTLE_MS);
+}
 
 function setStatus(text, cls = '') {
   ui.status.textContent = text;
@@ -24,8 +168,12 @@ function setStatus(text, cls = '') {
 
 function finishStory() {
   cancelIdle();
+  clearAnswerTimers();
+  driver.phase = 'idle';
   addEnding();
   setStatus('finished', '');
+  stopAlwaysListening();
+  ui.driverBar.hidden = true;
   ui.micBtn.disabled = true;
   ui.micBtn.textContent = 'The story is over';
   ui.input.disabled = true;
@@ -42,6 +190,8 @@ const queue = {
   next: 0,            // index we are waiting to play
   total: null,        // line count, known once turnEnd arrives
   playing: false,
+  paused: false,
+  nowText: '',        // the line currently sounding, so we can spot microphone echo
   current: null,      // the <audio> actually sounding right now
 
   add(epoch, idx, item) {
@@ -51,7 +201,7 @@ const queue = {
   },
 
   async pump() {
-    if (this.playing) return;
+    if (this.playing || this.paused) return;
     const epoch = this.epoch;
     const item = this.items.get(this.next);
     if (!item) return;
@@ -59,6 +209,7 @@ const queue = {
     this.playing = true;
     this.items.delete(this.next);
     const idx = this.next;
+    this.nowText = lineText.get(`${epoch}:${idx}`) || '';
 
     markLine(epoch, idx, 'playing');
     if (item.kind !== 'skip') {
@@ -95,13 +246,14 @@ const queue = {
 
   /** True only when every line of this turn has finished sounding. */
   checkDone() {
-    if (this.total === null || this.playing) return false;
+    if (this.total === null || this.playing || this.paused) return false;
     if (this.next < this.total || this.items.size) return false;
     if (storyOver) {
       finishStory();
     } else {
       setStatus('your turn', 'live');
       armIdle();
+      driverAwaitAnswer();
     }
     return true;
   },
@@ -119,7 +271,27 @@ const queue = {
     this.next = 0;
     this.total = null;
     this.playing = false;
+    this.paused = false;
+    this.nowText = '';
     this.stop();
+  },
+
+  /** Driver mode: hold the clip exactly where it is until they say resume. */
+  pause() {
+    if (this.paused) return;
+    this.paused = true;
+    if (this.current) this.current.pause();
+  },
+
+  resume() {
+    if (!this.paused) return;
+    this.paused = false;
+    if (this.current) {
+      this.current.play().catch(() => {});
+    } else {
+      this.pump();
+      this.checkDone();
+    }
   },
 
   stop() {
@@ -134,10 +306,14 @@ const queue = {
 
 /* ---------------- script rendering ---------------- */
 
+/** What each line actually says, so we can tell the speakers apart from the driver. */
+const lineText = new Map();
+
 function addLine(epoch, idx, line) {
   const el = document.createElement('div');
   el.className = 'ln';
   el.dataset.key = `${epoch}:${idx}`;
+  lineText.set(`${epoch}:${idx}`, line.text);
   const name = line.as || line.voice;
   const tone = line.tone ? ` <span class="tone">(${esc(line.tone)})</span>` : '';
   el.innerHTML = `<span class="who v-${esc(line.voice)}">${esc(name)}</span>${esc(line.text)}${tone}`;
@@ -210,6 +386,7 @@ function renderState(state) {
 
 function armIdle() {
   clearTimeout(idleTimer);
+  if (driver.on) return;                 // driver mode runs its own, much shorter clock
   if (!ui.nudge?.checked) return;
   idleTimer = setTimeout(() => {
     if (ws?.readyState === WebSocket.OPEN) {
@@ -247,6 +424,7 @@ function connect() {
     } else if (m.t === 'thinking') {
       cancelIdle();
       queue.reset();
+      driverTelling();
       setStatus('writing…', 'think');
     } else if (m.t === 'line') {
       addLine(queue.epoch, m.idx, m);
@@ -275,6 +453,7 @@ function connect() {
 function say(text) {
   if (!text?.trim() || storyOver || ws?.readyState !== WebSocket.OPEN) return;
   cancelIdle();
+  driverTelling();
   addYou(text.trim());
   ui.heard.textContent = '';
   ws.send(JSON.stringify({ t: 'say', text }));
@@ -296,6 +475,34 @@ async function initSpeech() {
       if (r.ok) speechCfg.authorizationToken = (await r.json()).token;
     } catch { /* keep the old token and hope */ }
   }, 8 * 60 * 1000);
+}
+
+/** Driver mode: one recogniser, opened once, never closed until the story ends. */
+function startAlwaysListening() {
+  if (listening || !speechCfg) return;
+  const SDK = window.SpeechSDK;
+  recognizer = new SDK.SpeechRecognizer(speechCfg, SDK.AudioConfig.fromDefaultMicrophoneInput());
+
+  recognizer.recognizing = (_s, e) => driverHeard(e.result.text || '', false);
+  recognizer.recognized = (_s, e) => {
+    if (e.result.reason === SDK.ResultReason.RecognizedSpeech && e.result.text) {
+      driverHeard(e.result.text, true);
+    }
+  };
+  recognizer.canceled = () => { listening = false; };
+
+  recognizer.startContinuousRecognitionAsync();
+  listening = true;
+  ui.driverBar.hidden = false;
+  driverHint('Listening');
+}
+
+function stopAlwaysListening() {
+  if (!driver.on || !recognizer) return;
+  listening = false;
+  const r = recognizer;
+  recognizer = null;
+  r.stopContinuousRecognitionAsync(() => r.close(), () => r.close());
 }
 
 function startListening() {
@@ -403,17 +610,29 @@ ui.restart.onclick = () => location.reload();
 
 ui.startBtn.onclick = async () => {
   if (!chosenStory) return;
+  driver.on = !!ui.driverToggle?.checked;
   ui.startBtn.disabled = true;
   ui.startBtn.textContent = 'Starting…';
+  let micOk = true;
   try {
     await initSpeech();
   } catch (err) {
     console.warn('speech unavailable, typing still works', err);
+    micOk = false;
+    driver.on = false;
     ui.micBtn.disabled = true;
     ui.micBtn.textContent = 'Mic unavailable — type instead';
   }
   ui.startCard.hidden = true;
   ui.game.hidden = false;
+
+  if (driver.on) {
+    ui.micBtn.hidden = true;               // hands free: there is nothing to hold
+    ui.form.hidden = true;
+    startAlwaysListening();
+  }
+  if (micOk && !driver.on) ui.driverBar.hidden = true;
+
   connect();
 };
 

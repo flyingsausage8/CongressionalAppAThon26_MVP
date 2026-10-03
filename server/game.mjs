@@ -237,8 +237,7 @@ export class Session {
       .join('\n');
   }
 
-  direction(nudge) {
-    const n = this.turn + 1;
+  direction(nudge) {    const n = this.turn + 1;
     const maxTurns = this.maxTurns;
     const softTurns = Math.min(this.story.softTurns, maxTurns - 2);
     const forced = n >= maxTurns;
@@ -258,9 +257,16 @@ export class Session {
     }
 
     if (nudge) {
+      const again = typeof nudge === 'number' && nudge > 1;
       note +=
-        '\nThe listener has gone quiet. Pull them back in character - have someone ask them something direct and warm, ' +
-        'or let the world do something that needs an answer. Never alarming, never a system message.';
+        '\nThe listener has gone quiet. Do NOT advance the story. Keep this very short - two or three lines at most. ' +
+        'Have someone in the scene turn to them and ask the same choice again in plainer words. ' +
+        'Never alarming, never a system message, never a narrator apology.';
+      if (again) {
+        note +=
+          ` This is nudge ${nudge} in a row with no answer. Be warmer and more insistent. ` +
+          'Boil it down to one easy question they can answer with a single word.';
+      }
     }
     return note;
   }
@@ -349,9 +355,11 @@ export class Session {
       });
     }
 
-    this.turn++;
-    if (this.turn >= this.maxTurns) this.done = true;
-
+    // A nudge is not a move in the story - it must not eat the exchange budget.
+    if (!nudge) {
+      this.turn++;
+      if (this.turn >= this.maxTurns) this.done = true;
+    }
     emit({
       t: 'turnEnd',
       idx,

@@ -130,7 +130,7 @@ wss.on('connection', (ws) => {
     } else if (msg.t === 'say' && msg.text?.trim()) {
       run({ said: msg.text.trim() });
     } else if (msg.t === 'idle') {
-      run({ nudge: true });
+      run({ nudge: Number(msg.level) || 1 });
     }
   });
 });

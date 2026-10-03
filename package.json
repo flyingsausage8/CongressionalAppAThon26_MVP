@@ -9,7 +9,9 @@
     "play": "node tools/play.mjs",
     "smoke": "node tools/smoke.mjs",
     "bench": "node demo/pipeline.mjs",
-    "voices": "node demo/voices.mjs"
+    "voices": "node demo/voices.mjs",
+    "test:driver": "node tools/driver-test.mjs",
+    "test:nudge": "node tools/nudge-test.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"

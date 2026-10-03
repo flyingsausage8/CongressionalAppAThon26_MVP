@@ -20,6 +20,15 @@
     <p class="pickLabel">Choose a starting point</p>
     <div id="storyList" class="storyList"></div>
     <p class="premise" id="premise"></p>
+
+    <label class="driverToggle">
+      <input type="checkbox" id="driverMode" checked>
+      <span>
+        <strong>Driver mode</strong>
+        <em>Completely hands free. The mic stays on, so just talk. Say &ldquo;stop&rdquo; to pause and &ldquo;resume&rdquo; to carry on.</em>
+      </span>
+    </label>
+
     <button id="startBtn" class="big" disabled>Begin</button>
 
     <div id="savesWrap" hidden>
@@ -50,6 +59,11 @@
     </div>
 
     <div id="heard" class="heard"><span id="heardText"></span></div>
+
+    <div id="driverBar" class="driverBar" hidden>
+      <span class="ear"></span>
+      <span id="driverHint">Listening</span>
+    </div>
 
     <div class="controls">
       <button id="restartBtn" class="big" hidden>Tell another one</button>

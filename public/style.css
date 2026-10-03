@@ -307,3 +307,42 @@ button:disabled { opacity: 0.4; cursor: default; }
   margin-bottom: 10px;
 }
 .recap .ln { margin-bottom: 8px; font-size: 14px; }
+/* ---- driver mode ---- */
+.driverToggle {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 18px 0 20px;
+  padding: 14px 16px;
+  border: 1px solid #2c3550;
+  border-radius: 12px;
+  background: #151b2c;
+  cursor: pointer;
+}
+.driverToggle:hover { border-color: #3d4a6f; }
+.driverToggle input { margin-top: 3px; width: 18px; height: 18px; accent-color: #6ea8fe; flex: none; }
+.driverToggle strong { display: block; font-size: 15px; color: #e8ecf6; }
+.driverToggle em { display: block; font-style: normal; font-size: 13px; color: #8d99b5; margin-top: 3px; line-height: 1.45; }
+
+.driverBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  margin: 10px 0 4px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #151b2c;
+  border: 1px solid #2c3550;
+  font-size: 15px;
+  color: #9fb0d0;
+}
+.driverBar .ear {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #4a5775; flex: none;
+}
+.driverBar.live { color: #bfe0ff; border-color: #35558a; }
+.driverBar.live .ear { background: #6ea8fe; animation: pulse 1.1s ease-in-out infinite; }
+.driverBar.think .ear { background: #e3b341; animation: pulse .7s ease-in-out infinite; }
+.driverBar.err .ear { background: #e06c75; }
+@keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
