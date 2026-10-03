@@ -13,10 +13,11 @@ const ui = {
 };
 
 const IDLE_MS = 25000;       // hands-on mode: how long before we prod you
-const ANSWER_MS = 5000;      // driver mode: how long we listen before asking again
+const ANSWER_MS = 9000;      // driver mode: how long we listen before asking again
 const SETTLE_MS = 1000;      // driver mode: one second of quiet means they have finished
 const MIC_GAP_MS = 100;      // fallback only; the real speaker lag is measured, see speakerLagMs()
 const UNKNOWN_LAG_MS = 350;  // used when the browser cannot measure it (remote desktops report 0)
+const SOUND_HOLD_MS = 1500;  // never nudge someone whose voice we can already hear
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
 let starting = false;        // a microphone is being opened right now; do not open a second
@@ -47,6 +48,12 @@ const driver = {
   wait: null,
   urges: 0,
   micGen: 0,        // which microphone attempt is live; stale callbacks compare against it
+  nudging: false,   // the line being spoken is a repeat of the question, so answer over it
+  windowStart: 0,   // when the current listening window opened
+  thinkMs: 0,       // time they have actually been left to think, nudges excluded
+  spokeAt: 0,       // when they first spoke in answer to this question
+  replyMs: 0,       // how long that took them, once known
+  lastSoundAt: 0,   // last moment the microphone carried real sound
 };
 
 const STOP_WORDS = /\b(stop|pause|wait|hold on|quiet|shush)\b/i;
@@ -178,6 +185,13 @@ function driverTelling() {
   if (!driver.on) return;
   // An answer that landed while an urge was already in flight must not be thrown away.
   if (driver.phase === 'answering' && isRealAnswer(driver.buffer)) driver.pending = driver.buffer.trim();
+  // Time spent listening to the story is not time the driver was given to think. Bank only
+  // the part of the wait that was genuinely theirs, or a slow nudge makes an alert driver
+  // look half asleep.
+  if (driver.phase === 'answering' && driver.windowStart) {
+    driver.thinkMs += Date.now() - driver.windowStart;
+    driver.windowStart = 0;
+  }
   clearAnswerTimers();
   driver.phase = 'telling';
   driver.buffer = '';
@@ -206,18 +220,23 @@ function driverAwaitAnswer() {
 function beginAnswering() {
   if (!driver.on || storyOver) return;
   driver.phase = 'answering';
+  driver.nudging = false;
   driver.buffer = '';
   driver.quietSince = Date.now();
-  // The question was asked once. A nudge repeats it, so it must not restart the clock -
-  // otherwise a driver who took twenty seconds and a nudge is recorded as having answered
-  // in two. Only a genuinely new question clears this, when the answer is sent.
-  if (!driver.askedAt) driver.askedAt = Date.now();
-  driver.spokeAt = 0;
+  // A nudge repeats the same question, so it must not restart the clock. Only a genuinely
+  // new question does, and that is marked by the answer to the last one being sent.
+  if (!driver.askedAt) {
+    driver.askedAt = Date.now();
+    driver.thinkMs = 0;
+    driver.spokeAt = 0;
+    driver.replyMs = 0;
+  }
+  driver.windowStart = Date.now();
   driver.sawInterim = false;
   driver.heardSound = false;
   driver.peak = 0;
   driver.utterStart = 0;
-  micReport('listening', 'microphone window open');
+  micReport('listening', `window open; thinking time so far ${Math.round(driver.thinkMs / 100) / 10}s`);
 
   if (driver.pending) {                      // they answered while an urge was in flight
     const held = driver.pending;
@@ -236,10 +255,31 @@ function beginAnswering() {
 function urgeAgain() {
   if (!driver.on || driver.phase !== 'answering' || storyOver) return;
   if (ws?.readyState !== WebSocket.OPEN) return;
+  // The level meter sees sound roughly a second before the words come back from the speech
+  // service. Without this check the nudge talks straight over a driver who is already
+  // halfway through their answer, and then that answer is binned as "story talking".
+  if (driver.lastSoundAt && Date.now() - driver.lastSoundAt < SOUND_HOLD_MS) {
+    driver.wait = setTimeout(urgeAgain, SOUND_HOLD_MS);
+    return;
+  }
   driver.urges++;
+  driver.nudging = true;                     // what follows is the question, not a story beat
   driverHint('Still with us?', 'think');
   micReport('urge', `#${driver.urges} sound:${driver.heardSound ? 'yes' : 'no'} words:${driver.sawInterim ? 'yes' : 'no'}`);
   ws.send(JSON.stringify({ t: 'idle', level: driver.urges }));
+}
+
+/**
+ * Mark the moment they began answering, and work out how long that took them. Only the
+ * stretches where the microphone was actually theirs count: the seconds the story spent
+ * writing and speaking a nudge were never thinking time, and counting them turned a
+ * four-second answer into a twenty-second one.
+ */
+function noteSpoke() {
+  if (driver.spokeAt) return;
+  driver.spokeAt = Date.now();
+  driver.lastSoundAt = driver.spokeAt;
+  driver.replyMs = driver.thinkMs + (driver.windowStart ? driver.spokeAt - driver.windowStart : 0);
 }
 
 /** Everything the mic hears while driver mode is on comes through here. */
@@ -271,13 +311,16 @@ function driverHeard(text, final, startMs) {
       queue.pause();
       driver.phase = 'paused';
       driverHint('Paused \u2014 say \u201cresume\u201d', 'err');
-    } else if (final) {
-      micReport('dropped', `while story talking: "${text}"`);
+      return;
     }
-    return;                                  // no barge-in: the story keeps its floor
-  }
-
-  if (driver.phase !== 'answering') {
+    // A nudge is the same question again. It takes a couple of seconds to write and a few
+    // more to speak, and a driver who answers in that window was binned as "story talking"
+    // even though nothing was playing yet. Their words count.
+    if (!driver.nudging) {
+      if (final) micReport('dropped', `while story talking: "${text}"`);
+      return;                                // no barge-in: the story keeps its floor
+    }
+  } else if (driver.phase !== 'answering') {
     if (final) micReport('dropped', `phase ${driver.phase}: "${text}"`);
     return;
   }
@@ -299,13 +342,13 @@ function driverHeard(text, final, startMs) {
   driver.wait = null;
 
   if (!final) {
-    if (!driver.spokeAt) driver.spokeAt = Date.now();   // the moment they started answering
+    noteSpoke();
     ui.heard.textContent = (driver.buffer + ' ' + text).trim();
     driverHint('Listening\u2026', 'live');
     return;
   }
 
-  if (!driver.spokeAt) driver.spokeAt = Date.now();
+  noteSpoke();
   driver.buffer = (driver.buffer + ' ' + text).trim();
   ui.heard.textContent = driver.buffer;
 
@@ -314,9 +357,9 @@ function driverHeard(text, final, startMs) {
     const answer = driver.buffer.trim();
     driver.buffer = '';
     if (isRealAnswer(answer)) {
-      driver.urges = 0;
       micReport('answer', answer.slice(0, 80));
-      say(answer);
+      say(answer);                           // say() reads driver.urges, so reset after it
+      driver.urges = 0;
     } else {
       micReport('dropped', `nothing but filler: "${answer}"`);
       driverHint('Didn\u2019t catch that', 'err');
@@ -658,13 +701,20 @@ function connect() {
 
 function say(text) {
   if (!text?.trim() || storyOver || ws?.readyState !== WebSocket.OPEN) return;
-  // How long they took to answer, and how much prodding it needed. A driver who is
-  // nodding off gets slower and shorter, and the story needs to know. What counts is how
-  // long before they START talking - measuring to the end would make a long, chatty,
-  // wide-awake answer look like a slow one, and would include the settling pause too.
-  const replyMs = driver.askedAt ? (driver.spokeAt || Date.now()) - driver.askedAt : 0;
+  // How long they took to answer, and how much prodding it needed. A driver who is nodding
+  // off gets slower and shorter, and the story needs to know. Two things are deliberately
+  // excluded: the time the story itself was talking, and the time they spent finishing the
+  // sentence. Neither is thinking time, and both made alert drivers look drowsy.
+  const replyMs = !driver.askedAt ? 0
+    : driver.replyMs || driver.thinkMs + (driver.windowStart ? Date.now() - driver.windowStart : 0);
   const urges = driver.urges;
   driver.askedAt = 0;
+  driver.spokeAt = 0;
+  driver.replyMs = 0;
+  driver.thinkMs = 0;
+  driver.windowStart = 0;
+  if (driver.nudging) queue.stop();          // they answered over a nudge; stop repeating it
+  driver.nudging = false;
   cancelIdle();
   driverTelling();
   addYou(text.trim());
@@ -754,7 +804,7 @@ async function startAlwaysListening() {
   };
   recognizer.sessionStopped = () => {
     if (stale()) return;                     // likewise: never tear down its replacement
-    micReport('stopped');
+    micReport('stopped', `phase ${driver.phase}, ${Date.now() - driver.lastEventAt}ms since last sign of life`);
     relisten(gen);
   };
 
@@ -811,7 +861,10 @@ function watchLevel(stream, gen) {
       for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
       driver.peak = Math.max(driver.peak, peak);
       driver.levelNow = peak;
-      if (driver.phase === 'answering' && peak > 6) driver.heardSound = true;
+      if (driver.phase === 'answering' && peak > 6) {
+        driver.heardSound = true;
+        driver.lastSoundAt = Date.now();
+      }
     }, 100);
 
     // Every few seconds while we are waiting, say whether sound is arriving at all.

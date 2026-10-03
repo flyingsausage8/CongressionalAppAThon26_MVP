@@ -13,7 +13,8 @@
     "test:driver": "node tools/driver-test.mjs",
     "test:nudge": "node tools/nudge-test.mjs",
     "test:reconnect": "node tools/reconnect-test.mjs",
-    "test:alert": "node tools/alert-test.mjs"
+    "test:alert": "node tools/alert-test.mjs",
+    "test:timing": "node tools/timing-test.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"
