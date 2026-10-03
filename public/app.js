@@ -118,6 +118,9 @@ function driverAwaitAnswer() {
   driver.phase = 'answering';
   driver.buffer = '';
   driver.quietSince = Date.now();
+  driver.sawInterim = false;
+  driver.heardSound = false;
+  driver.peak = 0;
 
   if (driver.pending) {                      // they answered while an urge was in flight
     const held = driver.pending;
@@ -137,6 +140,7 @@ function urgeAgain() {
   if (ws?.readyState !== WebSocket.OPEN) return;
   driver.urges++;
   driverHint('Still with us?', 'think');
+  micReport('urge', `#${driver.urges} sound:${driver.heardSound ? 'yes' : 'no'} words:${driver.sawInterim ? 'yes' : 'no'}`);
   ws.send(JSON.stringify({ t: 'idle', level: driver.urges }));
 }
 
@@ -205,6 +209,7 @@ function driverHeard(text, final, startMs) {
     driver.buffer = '';
     if (isRealAnswer(answer)) {
       driver.urges = 0;
+      micReport('answer', answer.slice(0, 80));
       say(answer);
     } else {
       micReport('dropped', `nothing but filler: "${answer}"`);
@@ -471,6 +476,7 @@ function connect() {
     setStatus(reconnects ? 'back' : 'connected', 'live');
     reconnects = 0;
     ws.send(JSON.stringify({ t: 'start', storyId: chosenStory, resumeId }));
+    flushMicBacklog();
   };
 
   // A driver cannot look at the screen, so a dropped connection must heal itself.
@@ -572,11 +578,13 @@ async function startAlwaysListening() {
   // characters through the speakers and we submit the story's own words as your answer.
   let audioCfg;
   try {
+    if (driver.useDefaultInput) throw new Error('forced default input');
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
     driver.stream = stream;
     audioCfg = SDK.AudioConfig.fromStreamInput(stream);
+    watchLevel(stream);
   } catch (err) {
     micReport('no-echo-cancel', String(err?.message || err));
     driver.stream = null;
@@ -589,6 +597,7 @@ async function startAlwaysListening() {
 
   recognizer.recognizing = (_s, e) => {
     driver.lastEventAt = Date.now();
+    if (!driver.sawInterim) { driver.sawInterim = true; micReport('hearing', String(e.result.text || '').slice(0, 60)); }
     driverHeard(e.result.text || '', false, startOf(e));
   };
   recognizer.recognized = (_s, e) => {
@@ -635,9 +644,61 @@ async function startAlwaysListening() {
 }
 
 /** Tell the server, so microphone trouble shows up in the transcript. */
+const micBacklog = [];
 function micReport(event, detail = '') {
   console.warn('[mic]', event, detail);
-  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'mic', event, detail }));
+  const m = JSON.stringify({ t: 'mic', event, detail });
+  if (ws?.readyState === WebSocket.OPEN) ws.send(m);
+  else if (micBacklog.length < 50) micBacklog.push(m);   // the mic opens before the socket
+}
+
+function flushMicBacklog() {
+  while (micBacklog.length && ws?.readyState === WebSocket.OPEN) ws.send(micBacklog.shift());
+}
+
+/* Is the microphone actually carrying sound? The recogniser can sit there silently doing
+   nothing, and without this we cannot tell a dead mic from a deaf transcriber. */
+function watchLevel(stream) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const node = ctx.createAnalyser();
+    node.fftSize = 512;
+    ctx.createMediaStreamSource(stream).connect(node);
+    const buf = new Uint8Array(node.fftSize);
+    driver.audioCtx = ctx;
+    driver.peak = 0;
+
+    clearInterval(driver.levelTimer);
+    driver.levelTimer = setInterval(() => {
+      node.getByteTimeDomainData(buf);
+      let peak = 0;
+      for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
+      driver.peak = Math.max(driver.peak, peak);
+      driver.levelNow = peak;
+      if (driver.phase === 'answering' && peak > 6) driver.heardSound = true;
+    }, 100);
+
+    // Every few seconds while we are waiting, say whether sound is arriving at all.
+    clearInterval(driver.levelReport);
+    driver.levelReport = setInterval(() => {
+      if (driver.phase !== 'answering') { driver.peak = 0; return; }
+      const track = stream.getAudioTracks()[0];
+      micReport('level', `peak ${driver.peak} ctx ${ctx.state} track ${track?.readyState} muted ${track?.muted}`);
+      // Sound is reaching us but the transcriber has produced nothing. The stream feed is
+      // broken, not the microphone - rebuild on the browser's default input instead.
+      if (driver.peak > 10 && !driver.sawInterim && Date.now() - driver.quietSince > 7000) {
+        micReport('deaf', 'sound but no words - falling back to default microphone input');
+        driver.useDefaultInput = true;
+        relisten();
+        return;
+      }
+      driver.peak = 0;
+    }, 4000);
+
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  } catch (err) {
+    micReport('level-unavailable', String(err?.message || err));
+  }
 }
 
 /** Wall-clock time the speech in this result began. */
@@ -650,6 +711,10 @@ function startOf(e) {
 function relisten() {
   if (!driver.on || storyOver) return;
   listening = false;
+  clearInterval(driver.levelTimer);
+  clearInterval(driver.levelReport);
+  try { driver.audioCtx?.close(); } catch { /* ignore */ }
+  driver.audioCtx = null;
   const old = recognizer;
   recognizer = null;
   try { old?.close(); } catch { /* already gone */ }
