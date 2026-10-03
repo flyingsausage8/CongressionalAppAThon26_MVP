@@ -384,3 +384,39 @@ button:disabled { opacity: 0.4; cursor: default; }
   font-size: 14px;
   color: var(--dim);
 }
+
+/* ---- live trace: what driver mode is doing, second by second ---- */
+#traceHead { display: flex; align-items: center; justify-content: space-between; }
+#traceClear {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  border-radius: 5px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+#traceClear:hover { color: var(--fg); }
+
+.trace {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.trace .tr { display: flex; gap: 8px; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.trace .tr:last-child { border-bottom: 0; }
+.trace .tt { color: var(--dim); flex: 0 0 auto; }
+.trace .tw { flex: 1 1 auto; word-break: break-word; }
+.trace .tr.mic   .tw { color: #7fc2b0; }
+.trace .tr.ear   .tw { color: #6fd08c; }
+.trace .tr.wait  .tw { color: #c9a227; }
+.trace .tr.story .tw { color: #8ba3c4; }
+.trace .tr.bad   .tw { color: var(--accent); }

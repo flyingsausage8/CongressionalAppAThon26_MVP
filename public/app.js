@@ -10,6 +10,7 @@ const ui = {
   savesWrap: $('savesWrap'), saveList: $('saveList'),
   driverToggle: $('driverMode'), driverBar: $('driverBar'), driverHint: $('driverHint'),
   driverStats: $('driverStats'),
+  trace: $('trace'), traceHead: $('traceHead'), traceClear: $('traceClear'),
 };
 
 const IDLE_MS = 25000;       // hands-on mode: how long before we prod you
@@ -213,6 +214,7 @@ function driverAwaitAnswer() {
   driverHint('\u2026');
 
   driver.gapMs = speakerLagMs();
+  trace.mark(`audio finished - waiting ${driver.gapMs}ms for the speakers to catch up`);
   micReport('played', `last line ended; waiting ${driver.gapMs}ms for the speakers`);
   driver.gap = setTimeout(beginAnswering, driver.gapMs);
 }
@@ -247,6 +249,7 @@ function beginAnswering() {
   }
 
   driverHint('Your turn \u2014 just say it', 'live');
+  trace.add('mic', `RECORDING - ${ANSWER_MS / 1000}s before it asks again`);
   // The clock starts here, the moment the microphone is actually live again - not when the
   // last line ended, so none of their five seconds is spent waiting for the speakers.
   driver.wait = setTimeout(urgeAgain, ANSWER_MS);
@@ -259,11 +262,13 @@ function urgeAgain() {
   // service. Without this check the nudge talks straight over a driver who is already
   // halfway through their answer, and then that answer is binned as "story talking".
   if (driver.lastSoundAt && Date.now() - driver.lastSoundAt < SOUND_HOLD_MS) {
+    trace.add('ear', 'nudge held back - it can hear you speaking');
     driver.wait = setTimeout(urgeAgain, SOUND_HOLD_MS);
     return;
   }
   driver.urges++;
   driver.nudging = true;                     // what follows is the question, not a story beat
+  trace.add('wait', `NUDGE #${driver.urges} requested - writing it now`);
   driverHint('Still with us?', 'think');
   micReport('urge', `#${driver.urges} sound:${driver.heardSound ? 'yes' : 'no'} words:${driver.sawInterim ? 'yes' : 'no'}`);
   ws.send(JSON.stringify({ t: 'idle', level: driver.urges }));
@@ -280,7 +285,38 @@ function noteSpoke() {
   driver.spokeAt = Date.now();
   driver.lastSoundAt = driver.spokeAt;
   driver.replyMs = driver.thinkMs + (driver.windowStart ? driver.spokeAt - driver.windowStart : 0);
+  trace.add('ear', `HEARD YOU START - counted as ${(driver.replyMs / 1000).toFixed(1)}s to answer`);
 }
+
+/**
+ * A running account of what driver mode is deciding, on screen beside the story. Timestamps
+ * are relative to the last question so "it nudged me too early" can be read straight off it.
+ */
+const trace = {
+  t0: 0,
+  on: false,
+  add(kind, what) {
+    if (!this.on || !ui.trace) return;
+    const at = this.t0 ? (Date.now() - this.t0) / 1000 : 0;
+    const row = document.createElement('div');
+    row.className = `tr ${kind}`;
+    row.innerHTML = `<span class="tt">+${at.toFixed(1)}s</span><span class="tw"></span>`;
+    row.lastChild.textContent = what;
+    ui.trace.appendChild(row);
+    while (ui.trace.children.length > 300) ui.trace.firstChild.remove();
+    ui.trace.scrollTop = ui.trace.scrollHeight;
+  },
+  /** Restart the stopwatch - a new question is the thing everything else is measured from. */
+  mark(what) {
+    this.t0 = Date.now();
+    this.add('wait', what);
+  },
+  show() {
+    this.on = true;
+    if (ui.trace) ui.trace.hidden = false;
+    if (ui.traceHead) ui.traceHead.hidden = false;
+  },
+};
 
 /** Everything the mic hears while driver mode is on comes through here. */
 function driverHeard(text, final, startMs) {
@@ -317,11 +353,11 @@ function driverHeard(text, final, startMs) {
     // more to speak, and a driver who answers in that window was binned as "story talking"
     // even though nothing was playing yet. Their words count.
     if (!driver.nudging) {
-      if (final) micReport('dropped', `while story talking: "${text}"`);
+      if (final) { micReport('dropped', `while story talking: "${text}"`); trace.add('bad', `IGNORED (story talking): "${text}"`); }
       return;                                // no barge-in: the story keeps its floor
     }
   } else if (driver.phase !== 'answering') {
-    if (final) micReport('dropped', `phase ${driver.phase}: "${text}"`);
+    if (final) { micReport('dropped', `phase ${driver.phase}: "${text}"`); trace.add('bad', `IGNORED (${driver.phase}): "${text}"`); }
     return;
   }
 
@@ -358,10 +394,12 @@ function driverHeard(text, final, startMs) {
     driver.buffer = '';
     if (isRealAnswer(answer)) {
       micReport('answer', answer.slice(0, 80));
+      trace.add('ear', `SENT: "${answer}"`);
       say(answer);                           // say() reads driver.urges, so reset after it
       driver.urges = 0;
     } else {
       micReport('dropped', `nothing but filler: "${answer}"`);
+      trace.add('bad', `IGNORED (just a noise): "${answer}"`);
       driverHint('Didn\u2019t catch that', 'err');
       driver.wait = setTimeout(urgeAgain, ANSWER_MS);
     }
@@ -433,6 +471,7 @@ const queue = {
 
     markLine(epoch, idx, 'playing');
     if (item.kind !== 'skip') {
+      trace.add('story', `speaking line ${idx + 1}${this.total ? ' of ' + this.total : ''}`);
       try {
         await this.sound(item.src, item.voice);
       } catch (err) {
@@ -671,6 +710,7 @@ function connect() {
     } else if (m.t === 'thinking') {
       cancelIdle();
       queue.reset();
+      trace.add('story', driver.nudging ? 'writing the nudge\u2026' : 'WRITING THE NEXT SCRIPT\u2026');
       driverTelling();
       setStatus('writing…', 'think');
     } else if (m.t === 'line') {
@@ -830,8 +870,10 @@ async function startAlwaysListening() {
 
 /** Tell the server, so microphone trouble shows up in the transcript. */
 const micBacklog = [];
+const TRACE_MIC = { started: 'mic', ready: 'mic', stopped: 'bad', canceled: 'bad', 'track-ended': 'bad', 'start-failed': 'bad', 'no-echo-cancel': 'bad' };
 function micReport(event, detail = '') {
   console.warn('[mic]', event, detail);
+  if (TRACE_MIC[event]) trace.add(TRACE_MIC[event], `microphone ${event}${detail ? ' - ' + detail : ''}`);
   const m = JSON.stringify({ t: 'mic', event, detail });
   if (ws?.readyState === WebSocket.OPEN) ws.send(m);
   else if (micBacklog.length < 50) micBacklog.push(m);   // the mic opens before the socket
@@ -1046,10 +1088,12 @@ function pickSave(s) {
 }
 
 ui.restart.onclick = () => location.reload();
+if (ui.traceClear) ui.traceClear.onclick = () => { ui.trace.textContent = ''; };
 
 ui.startBtn.onclick = async () => {
   if (!chosenStory) return;
   driver.on = !!ui.driverToggle?.checked;
+  if (driver.on) { trace.show(); trace.mark('started'); }
   ui.startBtn.disabled = true;
   ui.startBtn.textContent = 'Starting…';
   let micOk = true;

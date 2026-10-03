@@ -14,7 +14,8 @@
     "test:nudge": "node tools/nudge-test.mjs",
     "test:reconnect": "node tools/reconnect-test.mjs",
     "test:alert": "node tools/alert-test.mjs",
-    "test:timing": "node tools/timing-test.mjs"
+    "test:timing": "node tools/timing-test.mjs",
+    "test:trace": "node tools/trace-test.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"

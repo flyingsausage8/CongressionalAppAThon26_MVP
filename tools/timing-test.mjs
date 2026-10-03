@@ -27,7 +27,8 @@ if (!/driver\.thinkMs \+= Date\.now\(\) - driver\.windowStart/.test(src)) {
 }
 
 const driver = {};
-const noteSpoke = new Function('driver', `${take('noteSpoke')}; return noteSpoke;`)(driver);
+const trace = { add() {} };                  // the on-screen log is not what we are testing
+const noteSpoke = new Function('driver', 'trace', `${take('noteSpoke')}; return noteSpoke;`)(driver, trace);
 
 let now = 0;
 const realNow = Date.now;
