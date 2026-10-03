@@ -39,6 +39,7 @@ const driver = {
   askedAt: 0,       // wall clock of when the question finished, so we can time the answer
   gap: null,        // the deliberate stretch of microphone silence between turns
   gapMs: MIC_GAP_MS, // how long that gap needs to be on this device
+  nudging: false,   // the line being spoken is a repeat of the question, so answer over it
   lastEventAt: 0,   // last sign of life from the microphone
   stream: null,     // the live microphone track, so we can tell if it really died
   settle: null,
@@ -214,6 +215,7 @@ function driverAwaitAnswer() {
 function beginAnswering() {
   if (!driver.on || storyOver) return;
   driver.phase = 'answering';
+  driver.nudging = false;
   driver.buffer = '';
   driver.quietSince = Date.now();
   driver.askedAt = Date.now();
@@ -240,6 +242,7 @@ function urgeAgain() {
   if (!driver.on || driver.phase !== 'answering' || storyOver) return;
   if (ws?.readyState !== WebSocket.OPEN) return;
   driver.urges++;
+  driver.nudging = true;                     // what follows is a question, not a story beat
   driverHint('Still with us?', 'think');
   micReport('urge', `#${driver.urges} sound:${driver.heardSound ? 'yes' : 'no'} words:${driver.sawInterim ? 'yes' : 'no'}`);
   ws.send(JSON.stringify({ t: 'idle', level: driver.urges }));
@@ -274,13 +277,15 @@ function driverHeard(text, final, startMs) {
       queue.pause();
       driver.phase = 'paused';
       driverHint('Paused \u2014 say \u201cresume\u201d', 'err');
-    } else if (final) {
-      micReport('dropped', `while story talking: "${text}"`);
+      return;
     }
-    return;                                  // no barge-in: the story keeps its floor
-  }
-
-  if (driver.phase !== 'answering') {
+    // A nudge is just the question asked again, so answering over it is exactly right.
+    // Anything else said while the story is talking still belongs to the story.
+    if (!driver.nudging) {
+      if (final) micReport('dropped', `while story talking: "${text}"`);
+      return;                                // no barge-in: the story keeps its floor
+    }
+  } else if (driver.phase !== 'answering') {
     if (final) micReport('dropped', `phase ${driver.phase}: "${text}"`);
     return;
   }
@@ -664,6 +669,8 @@ function say(text) {
   const replyMs = driver.askedAt ? Date.now() - driver.askedAt : 0;
   const urges = driver.urges;
   driver.askedAt = 0;
+  if (driver.nudging) queue.stop();          // they answered over the nudge; stop talking
+  driver.nudging = false;
   cancelIdle();
   driverTelling();
   addYou(text.trim());
