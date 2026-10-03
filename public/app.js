@@ -4,11 +4,11 @@ const ui = {
   startCard: $('startCard'), startBtn: $('startBtn'), premise: $('premise'),
   game: $('game'), script: $('script'), status: $('status'), dot: $('dot'),
   latency: $('latency'), heard: $('heardText'), micBtn: $('micBtn'),
-  form: $('typeForm'), input: $('typeInput'),
+  form: $('typeForm'), input: $('typeInput'), nudge: $('nudge'),
 };
 
 const SFX_NAMES = ['turn_signal', 'radio_static', 'engine_rumble', 'rumble_strip', 'thunder', 'horn_distant'];
-const IDLE_MS = 14000;
+const IDLE_MS = 25000;
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
 const sfxCache = new Map();
@@ -18,66 +18,108 @@ function setStatus(text, cls = '') {
   ui.dot.className = 'dot ' + cls;
 }
 
-/* ---------------- playback queue: TTS runs in parallel, audio plays in order ------------- */
+/* ---------------- playback queue: TTS runs in parallel, audio plays in order -------------
+   Every turn gets an epoch. Anything belonging to an older epoch is ignored, so a turn that
+   is still playing when the next one starts cannot corrupt the new turn's position.        */
 
 const queue = {
+  epoch: 0,
   items: new Map(),   // idx -> { kind, src }
   next: 0,            // index we are waiting to play
+  total: null,        // line count, known once turnEnd arrives
   playing: false,
+  current: null,      // the <audio> actually sounding right now
 
-  add(idx, item) {
+  add(epoch, idx, item) {
+    if (epoch !== this.epoch) return;
     this.items.set(idx, item);
     this.pump();
   },
 
   async pump() {
     if (this.playing) return;
+    const epoch = this.epoch;
     const item = this.items.get(this.next);
     if (!item) return;
+
     this.playing = true;
     this.items.delete(this.next);
+    const idx = this.next;
 
-    markLine(this.next, 'playing');
-    try {
-      if (item.kind === 'skip') {
-        // nothing to play, just move on
-      } else {
-        await playAudio(item.src);
+    markLine(epoch, idx, 'playing');
+    if (item.kind !== 'skip') {
+      try {
+        await this.sound(item.src);
+      } catch (err) {
+        console.warn('playback failed', err);
       }
-    } catch (err) {
-      console.warn('playback failed', err);
     }
-    markLine(this.next, 'done');
 
+    // a new turn started while this clip played - abandon this chain
+    if (epoch !== this.epoch) return;
+
+    markLine(epoch, idx, 'done');
     this.next++;
     this.playing = false;
     this.pump();
-
-    if (!this.items.size) armIdle();
+    this.checkDone();
   },
 
+  sound(src) {
+    return new Promise((resolve) => {
+      const a = new Audio(src);
+      this.current = a;
+      const fin = () => {
+        if (this.current === a) this.current = null;
+        resolve();
+      };
+      a.onended = fin;
+      a.onerror = fin;
+      a.play().catch(fin);
+    });
+  },
+
+  /** True only when every line of this turn has finished sounding. */
+  checkDone() {
+    if (this.total === null || this.playing) return false;
+    if (this.next < this.total || this.items.size) return false;
+    setStatus('your move', 'live');
+    armIdle();
+    return true;
+  },
+
+  endTurn(epoch, total) {
+    if (epoch !== this.epoch) return;
+    this.total = total;
+    this.checkDone();
+  },
+
+  /** Starts a fresh turn. Silences anything still playing. */
   reset() {
+    this.epoch++;
     this.items.clear();
     this.next = 0;
+    this.total = null;
     this.playing = false;
+    this.stop();
+  },
+
+  stop() {
+    if (this.current) {
+      this.current.pause();
+      this.current.onended = null;
+      this.current.onerror = null;
+      this.current = null;
+    }
   },
 };
 
-function playAudio(src) {
-  return new Promise((resolve) => {
-    const a = new Audio(src);
-    a.onended = resolve;
-    a.onerror = resolve;
-    a.play().catch(resolve);
-  });
-}
-
 /* ---------------- script rendering ---------------- */
 
-function addLine(idx, line) {
+function addLine(epoch, idx, line) {
   const el = document.createElement('div');
   el.className = 'ln' + (line.voice === 'sfx' ? ' sfxline' : '');
-  el.dataset.idx = idx;
+  el.dataset.key = `${epoch}:${idx}`;
   if (line.voice === 'sfx') {
     el.textContent = `[ ${line.name.replace(/_/g, ' ')} ]`;
   } else {
@@ -88,8 +130,8 @@ function addLine(idx, line) {
   el.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
-function markLine(idx, cls) {
-  const el = ui.script.querySelector(`.ln[data-idx="${idx}"]`);
+function markLine(epoch, idx, cls) {
+  const el = ui.script.querySelector(`.ln[data-key="${epoch}:${idx}"]`);
   if (el) el.classList.add(cls);
 }
 
@@ -99,6 +141,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 function armIdle() {
   clearTimeout(idleTimer);
+  if (!ui.nudge?.checked) return;
   idleTimer = setTimeout(() => {
     if (ws?.readyState === WebSocket.OPEN) {
       setStatus('you went quiet…', 'think');
@@ -133,21 +176,24 @@ function connect() {
       queue.reset();
       setStatus('writing…', 'think');
     } else if (m.t === 'line') {
-      addLine(m.idx, m);
+      addLine(queue.epoch, m.idx, m);
     } else if (m.t === 'audio') {
       const bytes = Uint8Array.from(atob(m.mp3), (c) => c.charCodeAt(0));
-      queue.add(m.idx, { kind: 'audio', src: URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' })) });
+      queue.add(queue.epoch, m.idx, {
+        kind: 'audio',
+        src: URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' })),
+      });
       setStatus('playing', 'live');
     } else if (m.t === 'sfx') {
-      queue.add(m.idx, { kind: 'audio', src: sfxCache.get(m.name) || `sfx/${m.name}.wav` });
+      queue.add(queue.epoch, m.idx, { kind: 'audio', src: sfxCache.get(m.name) || `sfx/${m.name}.wav` });
     } else if (m.t === 'audioError') {
-      queue.add(m.idx, { kind: 'skip' });
+      queue.add(queue.epoch, m.idx, { kind: 'skip' });
     } else if (m.t === 'turnEnd') {
       ui.latency.textContent = m.firstAudioMs ? `first audio ${m.firstAudioMs}ms` : '';
-      setStatus('your move', 'live');
-      armIdle();
+      queue.endTurn(queue.epoch, m.idx);
     } else if (m.t === 'error') {
       setStatus('error: ' + m.message, 'err');
+      armIdle();
     }
   };
 }
@@ -179,6 +225,8 @@ async function initSpeech() {
 
 function startListening() {
   if (listening || !speechCfg) return;
+  queue.stop();           // barge-in: your voice cuts the characters off
+  cancelIdle();
   const SDK = window.SpeechSDK;
   recognizer = new SDK.SpeechRecognizer(speechCfg, SDK.AudioConfig.fromDefaultMicrophoneInput());
   let heard = '';
@@ -193,7 +241,6 @@ function startListening() {
 
   recognizer.startContinuousRecognitionAsync();
   listening = true;
-  cancelIdle();
   ui.micBtn.classList.add('on');
   ui.micBtn.textContent = 'Listening — release to send';
 

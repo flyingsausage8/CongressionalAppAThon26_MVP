@@ -100,6 +100,17 @@ button:disabled { opacity: 0.4; cursor: default; }
 @keyframes pulse { 50% { opacity: 0.25; } }
 #latency { margin-left: auto; text-transform: none; letter-spacing: 0; }
 
+.nudgeToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 6px;
+}
+.nudgeToggle input { accent-color: var(--accent); cursor: pointer; }
+
 .script { min-height: 200px; }
 
 .ln {
