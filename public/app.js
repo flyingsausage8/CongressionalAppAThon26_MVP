@@ -174,9 +174,14 @@ function clearAnswerTimers() {
  * remote desktops, and the sound there is travelling over a network - a small guess would
  * be badly wrong, so we wait a conservative beat instead.
  */
+let lagCtx = null;
 function speakerLagMs() {
-  const ctx = driver.audioCtx;
-  const sec = Number(ctx?.outputLatency) || 0;
+  // This context exists only to read the speaker delay. It must never be handed the
+  // microphone stream: see startAlwaysListening for why a second tap goes badly.
+  try {
+    if (!lagCtx) lagCtx = new (window.AudioContext || window.webkitAudioContext)();
+  } catch { /* no Web Audio here; fall through to the safe guess */ }
+  const sec = Number(lagCtx?.outputLatency) || 0;
   if (!sec) return UNKNOWN_LAG_MS;                 // the browser has no idea; assume the worst
   return Math.min(600, Math.max(80, Math.round(sec * 1000) + 30));   // + a little for the room
 }
@@ -236,7 +241,6 @@ function beginAnswering() {
   driver.windowStart = Date.now();
   driver.sawInterim = false;
   driver.heardSound = false;
-  driver.peak = 0;
   driver.utterStart = 0;
   micReport('listening', `window open; thinking time so far ${Math.round(driver.thinkMs / 100) / 10}s`);
 
@@ -258,9 +262,9 @@ function beginAnswering() {
 function urgeAgain() {
   if (!driver.on || driver.phase !== 'answering' || storyOver) return;
   if (ws?.readyState !== WebSocket.OPEN) return;
-  // The level meter sees sound roughly a second before the words come back from the speech
-  // service. Without this check the nudge talks straight over a driver who is already
-  // halfway through their answer, and then that answer is binned as "story talking".
+  // Azure's own voice detector notices sound roughly a second before the words come back.
+  // Without this check the nudge talks straight over a driver who is already halfway
+  // through their answer, and then that answer is binned as "story talking".
   if (driver.lastSoundAt && Date.now() - driver.lastSoundAt < SOUND_HOLD_MS) {
     trace.add('ear', 'nudge held back - it can hear you speaking');
     driver.wait = setTimeout(urgeAgain, SOUND_HOLD_MS);
@@ -299,7 +303,7 @@ const trace = {
     if (!this.on || !ui.trace) return;
     const at = this.t0 ? (Date.now() - this.t0) / 1000 : 0;
     const row = document.createElement('div');
-    row.className = `tr ${kind}`;
+    row.className = `tr t-${kind}`;
     row.innerHTML = `<span class="tt">+${at.toFixed(1)}s</span><span class="tw"></span>`;
     row.lastChild.textContent = what;
     ui.trace.appendChild(row);
@@ -803,7 +807,16 @@ async function startAlwaysListening() {
     if (stale()) { stream.getTracks().forEach((t) => t.stop()); starting = false; return; }
     driver.stream = stream;
     audioCfg = SDK.AudioConfig.fromStreamInput(stream);
-    watchLevel(stream, gen);
+    // Nothing else may touch this stream. The Speech SDK builds its own AudioContext at
+    // 16kHz and calls createMediaStreamSource on it; a second AudioContext on the same
+    // track means the browser feeds one graph and sends the other silence. A level meter
+    // added here did exactly that - it read loud audio while Azure sat connected and deaf,
+    // never returning so much as a no-match. If you need to know whether the driver is
+    // making noise, use recognizer.speechStartDetected below. Do not tap the stream.
+    const t = stream.getAudioTracks()[0];
+    const s = t?.getSettings?.() || {};
+    micReport('audio', `echoCancellation ${s.echoCancellation} noiseSuppression ${s.noiseSuppression} ` +
+      `device "${t?.label || '?'}" speakerLag ${speakerLagMs()}ms`);
   } catch (err) {
     micReport('no-echo-cancel', String(err?.message || err));
     if (stale()) { starting = false; return; }
@@ -830,7 +843,16 @@ async function startAlwaysListening() {
       micReport('no-match', `phase ${driver.phase}`);     // heard sound, made no words of it
     }
   };
-  recognizer.speechStartDetected = () => { if (!stale()) driver.lastEventAt = Date.now(); };
+  // Azure's voice detector is now our only "is someone talking" signal, and it is a better
+  // one than a level meter: it fires on speech, not on road noise.
+  recognizer.speechStartDetected = () => {
+    if (stale()) return;
+    driver.lastEventAt = Date.now();
+    if (driver.phase !== 'answering') return;
+    driver.heardSound = true;
+    driver.lastSoundAt = Date.now();
+    trace.add('ear', 'it can hear you talking');
+  };
   recognizer.sessionStarted = () => {
     if (stale()) return;
     driver.micT0 = Date.now();
@@ -883,55 +905,6 @@ function flushMicBacklog() {
   while (micBacklog.length && ws?.readyState === WebSocket.OPEN) ws.send(micBacklog.shift());
 }
 
-/* Is the microphone actually carrying sound? The recogniser can sit there silently doing
-   nothing, and without this we cannot tell a dead mic from a deaf transcriber. */
-function watchLevel(stream, gen) {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const node = ctx.createAnalyser();
-    node.fftSize = 512;
-    ctx.createMediaStreamSource(stream).connect(node);
-    const buf = new Uint8Array(node.fftSize);
-    driver.audioCtx = ctx;
-    driver.peak = 0;
-
-    clearInterval(driver.levelTimer);
-    driver.levelTimer = setInterval(() => {
-      if (gen !== driver.micGen) { clearInterval(driver.levelTimer); return; }
-      node.getByteTimeDomainData(buf);
-      let peak = 0;
-      for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
-      driver.peak = Math.max(driver.peak, peak);
-      driver.levelNow = peak;
-      if (driver.phase === 'answering' && peak > 6) {
-        driver.heardSound = true;
-        driver.lastSoundAt = Date.now();
-      }
-    }, 100);
-
-    // Every few seconds while we are waiting, say whether sound is arriving at all.
-    // This only reports. It must never rebuild the microphone: an earlier version did,
-    // and it tore down a perfectly good one mid-answer, leaving the driver unheard.
-    clearInterval(driver.levelReport);
-    driver.levelReport = setInterval(() => {
-      if (gen !== driver.micGen) { clearInterval(driver.levelReport); return; }
-      if (driver.phase !== 'answering') { driver.peak = 0; return; }
-      const track = stream.getAudioTracks()[0];
-      micReport('level', `peak ${driver.peak} ctx ${ctx.state} track ${track?.readyState} muted ${track?.muted}`);
-      driver.peak = 0;
-    }, 4000);
-
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    const t = stream.getAudioTracks()[0];
-    const s = t?.getSettings?.() || {};
-    micReport('audio', `echoCancellation ${s.echoCancellation} noiseSuppression ${s.noiseSuppression} ` +
-      `device "${t?.label || '?'}" speakerLag ${speakerLagMs()}ms ` +
-      `(out ${ctx.outputLatency ?? '?'} base ${ctx.baseLatency ?? '?'})`);
-  } catch (err) {
-    micReport('level-unavailable', String(err?.message || err));
-  }
-}
-
 /** Wall-clock time the speech in this result began. */
 function startOf(e) {
   const off = Number(e?.result?.offset);
@@ -949,10 +922,6 @@ function relisten(gen) {
   driver.micGen++;                           // every callback from the old one is now dead
   listening = false;
   starting = false;
-  clearInterval(driver.levelTimer);
-  clearInterval(driver.levelReport);
-  try { driver.audioCtx?.close(); } catch { /* ignore */ }
-  driver.audioCtx = null;
   const old = recognizer;
   recognizer = null;
   try { old?.close(); } catch { /* already gone */ }

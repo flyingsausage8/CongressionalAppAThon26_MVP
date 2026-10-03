@@ -8,7 +8,8 @@ const css = u('../public/style.css');
 
 const checks = [
   ['panel markup', html.includes('id="trace"') && html.includes('id="traceClear"')],
-  ['panel styles', /\.trace \.tr\.story/.test(css)],
+  // The kind classes must stay namespaced: a bare `.mic` collides with the talk button.
+  ['panel styles', /\.trace \.tr\.t-story/.test(css) && !/\.trace \.tr\.story/.test(css)],
   ['css stays ascii', /^[\x00-\x7F]*$/.test(css)],
   ['element refs', js.includes("trace: $('trace')")],
   ['shown only in driver mode', /if \(driver\.on\) \{ trace\.show\(\)/.test(js)],
