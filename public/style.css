@@ -346,3 +346,41 @@ button:disabled { opacity: 0.4; cursor: default; }
 .driverBar.think .ear { background: #e3b341; animation: pulse .7s ease-in-out infinite; }
 .driverBar.err .ear { background: #e06c75; }
 @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+/* How awake the driver sounds - the first thing on the panel, readable at a glance. */
+.driverStats {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--green);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 22px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.driverStats.slowing { border-left-color: #c9a227; }
+.driverStats.fading { border-left-color: var(--accent); }
+
+.dsHead {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin-bottom: 12px;
+  color: var(--green);
+}
+.driverStats.slowing .dsHead { color: #c9a227; }
+.driverStats.fading .dsHead { color: var(--accent); }
+
+.dsRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 7px;
+}
+.dsRow b {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--fg);
+  min-width: 58px;
+}
+.dsRow span {
+  font-size: 14px;
+  color: var(--dim);
+}

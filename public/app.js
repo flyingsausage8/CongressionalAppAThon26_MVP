@@ -9,11 +9,12 @@ const ui = {
   sceneNow: $('sceneNow'), conditions: $('conditions'), facts: $('facts'),
   savesWrap: $('savesWrap'), saveList: $('saveList'),
   driverToggle: $('driverMode'), driverBar: $('driverBar'), driverHint: $('driverHint'),
+  driverStats: $('driverStats'),
 };
 
 const IDLE_MS = 25000;       // hands-on mode: how long before we prod you
-const ANSWER_MS = 11000;     // driver mode: how long a question waits before we ask again
-const SETTLE_MS = 1600;      // driver mode: silence that means "they have finished talking"
+const ANSWER_MS = 5000;      // driver mode: how long we listen before asking again
+const SETTLE_MS = 1000;      // driver mode: one second of quiet means they have finished
 const MIC_GAP_MS = 100;      // fallback only; the real speaker lag is measured, see speakerLagMs()
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
@@ -230,8 +231,9 @@ function beginAnswering() {
   }
 
   driverHint('Your turn \u2014 just say it', 'live');
-  // Ask again, but ease off a little each time rather than nagging on a fixed beat.
-  driver.wait = setTimeout(urgeAgain, ANSWER_MS + Math.min(driver.urges, 4) * 4000);
+  // The clock starts here, the moment the microphone is actually live again - not when the
+  // last line ended, so none of their five seconds is spent waiting for the speakers.
+  driver.wait = setTimeout(urgeAgain, ANSWER_MS);
 }
 
 function urgeAgain() {
@@ -319,7 +321,7 @@ function driverHeard(text, final, startMs) {
     } else {
       micReport('dropped', `nothing but filler: "${answer}"`);
       driverHint('Didn\u2019t catch that', 'err');
-      driver.wait = setTimeout(urgeAgain, 3000);
+      driver.wait = setTimeout(urgeAgain, ANSWER_MS);
     }
   }, SETTLE_MS);
 }
@@ -327,6 +329,19 @@ function driverHeard(text, final, startMs) {
 function setStatus(text, cls = '') {
   ui.status.textContent = text;
   ui.dot.className = 'dot ' + cls;
+}
+
+/** How awake the listener sounds, big enough to read at a glance. */
+function showDriverStats(a) {
+  if (!a) { ui.driverStats.hidden = true; return; }
+  const label = { awake: 'Wide awake', slowing: 'Slowing down', fading: 'Fading' };
+  ui.driverStats.hidden = false;
+  ui.driverStats.className = `driverStats ${a.level}`;
+  ui.driverStats.innerHTML =
+    `<div class="dsHead">${label[a.level]}</div>` +
+    `<div class="dsRow"><b>${a.secs}s</b><span>to answer</span></div>` +
+    `<div class="dsRow"><b>${a.words}</b><span>words each</span></div>` +
+    `<div class="dsRow"><b>${a.nudged}/${a.of}</b><span>needed a nudge</span></div>`;
 }
 
 function finishStory() {
@@ -630,7 +645,8 @@ function connect() {
       queue.add(queue.epoch, m.idx, { kind: 'skip' });
     } else if (m.t === 'turnEnd') {
       ui.latency.textContent = m.firstAudioMs ? `${m.firstAudioMs}ms` : '';
-      ui.progress.textContent = `exchange ${m.turn}` + (m.alertLine ? ` · ${m.alertLine}` : '');
+      ui.progress.textContent = `exchange ${m.turn}`;
+      showDriverStats(m.alert);
       renderState(m.state);
       storyOver = !!m.done;
       queue.endTurn(queue.epoch, m.idx);
@@ -664,11 +680,6 @@ async function initSpeech() {
   const SDK = window.SpeechSDK;
   speechCfg = SDK.SpeechConfig.fromAuthorizationToken(token, region);
   speechCfg.speechRecognitionLanguage = 'en-US';
-  // How long a pause means "they have finished". Too short and a mid-sentence breath gets
-  // sent as the whole answer, which is what used to truncate people.
-  try {
-    speechCfg.setProperty(SDK.PropertyId.Speech_SegmentationSilenceTimeoutMs, '900');
-  } catch { /* older SDK, the default is fine */ }
   // refresh before the 10-minute token expires
   setInterval(async () => {
     try {
