@@ -34,6 +34,7 @@ const driver = {
   lastPlayEnd: 0,   // wall clock of the last audio frame we played
   micT0: 0,         // wall clock of when the recogniser session started
   utterStart: 0,    // wall clock of when the current run of speech began
+  askedAt: 0,       // wall clock of when the question finished, so we can time the answer
   lastEventAt: 0,   // last sign of life from the microphone
   stream: null,     // the live microphone track, so we can tell if it really died
   settle: null,
@@ -346,6 +347,7 @@ const queue = {
       finishStory();
     } else {
       setStatus('your turn', 'live');
+      driver.askedAt = Date.now();         // the question has finished; start the clock
       armIdle();
       driverAwaitAnswer();
     }
@@ -555,7 +557,7 @@ function connect() {
       queue.add(queue.epoch, m.idx, { kind: 'skip' });
     } else if (m.t === 'turnEnd') {
       ui.latency.textContent = m.firstAudioMs ? `${m.firstAudioMs}ms` : '';
-      ui.progress.textContent = `exchange ${m.turn}`;
+      ui.progress.textContent = `exchange ${m.turn}` + (m.alertLine ? ` · ${m.alertLine}` : '');
       renderState(m.state);
       storyOver = !!m.done;
       queue.endTurn(queue.epoch, m.idx);
@@ -568,11 +570,16 @@ function connect() {
 
 function say(text) {
   if (!text?.trim() || storyOver || ws?.readyState !== WebSocket.OPEN) return;
+  // How long they took to answer, and how much prodding it needed. A driver who is
+  // nodding off gets slower and shorter, and the story needs to know.
+  const replyMs = driver.askedAt ? Date.now() - driver.askedAt : 0;
+  const urges = driver.urges;
+  driver.askedAt = 0;
   cancelIdle();
   driverTelling();
   addYou(text.trim());
   ui.heard.textContent = '';
-  ws.send(JSON.stringify({ t: 'say', text }));
+  ws.send(JSON.stringify({ t: 'say', text, replyMs, urges }));
 }
 
 /* ---------------- speech to text ---------------- */

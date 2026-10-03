@@ -129,7 +129,7 @@ wss.on('connection', (ws) => {
       emit({ t: 'storyStarted', id: story.id, title: story.title, you: story.you, goal: story.goal, saveId: log.id });
       run({ said: null });
     } else if (msg.t === 'say' && msg.text?.trim()) {
-      run({ said: msg.text.trim() });
+      run({ said: msg.text.trim(), replyMs: Number(msg.replyMs) || 0, urges: Number(msg.urges) || 0 });
     } else if (msg.t === 'idle') {
       run({ nudge: Number(msg.level) || 1 });
     } else if (msg.t === 'mic') {

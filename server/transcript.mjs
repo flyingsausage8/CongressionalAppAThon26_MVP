@@ -45,7 +45,7 @@ export class Transcript {
     this.write(`\n- **${as || voice}**${tone ? ` _(${tone})_` : ''}: ${text}\n`);
   }
 
-  endTurn({ turn, firstAudioMs, totalMs, state, done }) {
+  endTurn({ turn, firstAudioMs, totalMs, state, done, alertLine }) {
     const conds = Object.entries(state.cast || {})
       .filter(([id, c]) => c.condition && state.seen?.includes(id))
       .map(([id, c]) => `  - ${c.name || id}: ${c.condition}`)
@@ -53,6 +53,7 @@ export class Transcript {
     this.write(
       `\n> _exchange ${turn} · first audio ${firstAudioMs}ms · total ${totalMs}ms_\n` +
       `> _scene: ${state.scene}_\n` +
+      (alertLine ? `> _listener: ${alertLine}_\n` : '') +
       (state.you ? `\n**Conditions**\n  - you: ${state.you}\n${conds}\n` : '') +
       (done ? '\n---\n\n## The End\n' : '\n---\n'),
     );

@@ -80,6 +80,12 @@ Write for the ear, not the page. Use the plainest words you know.
 - Short sentences. One idea each. No semicolons. No clause piled on clause.
 - Narrator lines under 18 words. Character lines under 15 words. Count them.
 - Keep the whole turn around 55 words. Move fast. Something should change every single exchange.
+- NEW NAMES MUST BE EXPLAINED THE MOMENT THEY ARE SAID. If you name a place, group, thing or
+  custom the listener has never heard of, say what it is in the same breath, in everyday words.
+  Not "the mountain hall" but "the mountain hall - a whole town carved inside the rock".
+  Never use a name a second time until you have explained it once.
+- When something genuinely needs explaining, take the extra line. Being clear beats being short.
+  A character may speak for three or four sentences if they are explaining something that matters.
 - Concrete things the listener can picture instantly: a gate, a lantern, a wet rope, a cold hand.
 - At most ONE new name, object or fact per exchange. Never pile them up.
 - No describing two things at once. Say what happened, then what someone did about it.
@@ -167,6 +173,10 @@ export class Session {
     this.done = false;
     this.maxTurns = this.story.maxTurns;
 
+    // How awake the listener sounds. Every answer is timed, because a driver who is
+    // drifting off starts replying slower, shorter, and only after being nudged.
+    this.replies = [];
+
     this.state = {
       scene: this.story.opening,
       tension: '',
@@ -189,7 +199,41 @@ export class Session {
       maxTurns: this.maxTurns,
       state: this.state,
       history: this.history,
+      replies: this.replies,
     };
+  }
+
+  /**
+   * Reads how awake the listener sounds from the shape of their last few answers.
+   * Slow, short, nudged replies mean a driver who is fading.
+   */
+  alertness() {
+    const recent = this.replies.slice(-5);
+    if (!recent.length) return null;
+
+    const avg = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    const secs = Math.round(avg(recent.map((r) => r.ms)) / 100) / 10;
+    const words = Math.round(avg(recent.map((r) => r.words)) * 10) / 10;
+    const nudged = recent.filter((r) => r.urges > 0).length;
+    const last = recent[recent.length - 1];
+
+    // Each sign on its own is weak. Together they are worth acting on.
+    let score = 0;
+    if (secs > 7) score += 2; else if (secs > 4.5) score += 1;
+    if (words <= 2) score += 2; else if (words <= 3.5) score += 1;
+    if (nudged >= 2) score += 2; else if (nudged >= 1) score += 1;
+    if (last.ms > 9000) score += 1;
+
+    const level = score >= 4 ? 'fading' : score >= 2 ? 'slowing' : 'awake';
+    return { level, score, secs, words, nudged, of: recent.length, lastMs: last.ms };
+  }
+
+  /** The same reading in plain words, for the transcript and the screen. */
+  alertnessLine() {
+    const a = this.alertness();
+    if (!a) return '';
+    const how = { awake: 'sounds awake', slowing: 'slowing down', fading: 'fading - wake them up' };
+    return `${how[a.level]} | replies ${a.secs}s, ${a.words} words, nudged ${a.nudged}/${a.of}`;
   }
 
   /**
@@ -200,6 +244,7 @@ export class Session {
     const s = new Session(snap.storyId);
     s.turn = snap.turn || 0;
     s.history = Array.isArray(snap.history) ? snap.history : [];
+    s.replies = Array.isArray(snap.replies) ? snap.replies : [];
     s.maxTurns = snap.maxTurns || s.story.maxTurns;
     s.state = { ...s.state, ...(snap.state || {}) };
     s.state.cast = { ...s.state.cast, ...(snap.state?.cast || {}) };
@@ -298,6 +343,22 @@ export class Session {
           'Boil it down to one easy question they can answer with a single word.';
       }
     }
+
+    const a = this.alertness();
+    if (a && a.level !== 'awake') {
+      note += `\n\n[THE LISTENER] They are driving. Their last ${a.of} answers took ${a.secs}s on average, ` +
+        `ran ${a.words} words, and ${a.nudged} needed nudging. They are ${a.level}.`;
+      note += a.level === 'fading'
+        ? ' Wake them up. Have a character say their situation out loud and ask them something personal ' +
+          'they must answer in their own words - what they would do, what they think, what they would say ' +
+          'to someone. Not a yes or no. Raise the energy: louder voices, something sudden and harmless, ' +
+          'someone disagreeing. Never mention being tired, driving, or the game itself.'
+        : ' Pick the pace up. Make this exchange shorter and livelier, give them a sharper disagreement ' +
+          'to settle, and ask the question in a way that needs a real sentence back.';
+    } else if (a) {
+      note += `\n\n[THE LISTENER] Awake and keeping up - replies about ${a.secs}s, ${a.words} words. Keep this pace.`;
+    }
+
     return note;
   }
 
@@ -337,8 +398,15 @@ export class Session {
    * One turn. Script lines stream out and TTS fires the moment each line lands,
    * without waiting for the model to finish - that is where the speed comes from.
    */
-  async takeTurn({ said, nudge, resumed, emit }) {
+  async takeTurn({ said, nudge, resumed, replyMs, urges, emit }) {
     const t0 = performance.now();
+    if (said && Number(replyMs) > 0) {
+      this.replies.push({
+        ms: Math.min(Number(replyMs), 120000),
+        words: String(said).trim().split(/\s+/).filter(Boolean).length,
+        urges: Number(urges) || 0,
+      });
+    }
     const msgs = this.context(said, nudge, resumed);
     if (said) this.history.push({ role: 'user', content: `You say: "${said}"` });
 
@@ -411,6 +479,8 @@ export class Session {
       state: this.state,
       firstAudioMs: firstAudioAt,
       totalMs: Math.round(performance.now() - t0),
+      alert: this.alertness(),
+      alertLine: this.alertnessLine(),
     });
   }
 }
