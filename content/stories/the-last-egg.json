@@ -11,8 +11,8 @@
   "maxTurns": 20,
   "cast": {
     "narrator": {
-      "voice": "sage",
-      "style": "Clear, warm American audiobook narrator. Well-projected and easy to follow at speed, with crisp consonants and real energy. Never soft, sleepy or lilting.",
+      "voice": "ash",
+      "style": "Loud, clear American audiobook narrator. Projects strongly, as if reading aloud across a room over engine noise. Crisp consonants, full volume, real energy. Never soft, breathy, sleepy or lilting.",
       "bio": "Describes the country, the weather, the light, and the egg. Speaks to the listener as 'you'. Never decides what you do - only what the world does.",
       "condition": "Steady."
     },
@@ -42,7 +42,7 @@
     },
     {
       "id": "voice_c",
-      "voice": "ash",
+      "voice": "shimmer",
       "style": "Lively and theatrical, pleased with itself, but every word clear."
     },
     {

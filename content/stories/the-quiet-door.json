@@ -11,8 +11,8 @@
   "maxTurns": 22,
   "cast": {
     "narrator": {
-      "voice": "sage",
-      "style": "Clear, warm American audiobook narrator. Well-projected and easy to follow at speed, with crisp consonants and real energy. Never soft, sleepy or lilting.",
+      "voice": "ash",
+      "style": "Loud, clear American audiobook narrator. Projects strongly, as if reading aloud across a room over engine noise. Crisp consonants, full volume, real energy. Never soft, breathy, sleepy or lilting.",
       "bio": "Tells the tale of the road and the country it crosses. Speaks to the listener as 'you'. Describes the world and what happens in it, never what you decide.",
       "condition": "Steady."
     },
@@ -29,7 +29,7 @@
       "condition": "Ready to leave. Boots already on."
     },
     "yarrow": {
-      "voice": "ash",
+      "voice": "shimmer",
       "style": "Cheerful and lively, but clear and easy to follow. Never gabbles.",
       "bio": "The group's scout. Friendly, terrible at keeping secrets, and the only one who will say out loud what everyone is thinking. Genuinely brilliant on a cliff.",
       "condition": "Happy, and already eating something."

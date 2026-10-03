@@ -11,13 +11,13 @@
   "maxTurns": 14,
   "cast": {
     "narrator": {
-      "voice": "sage",
-      "style": "Clear, warm American audiobook narrator. Well-projected and easy to follow at speed, with crisp consonants and real energy. Never soft, sleepy or lilting.",
+      "voice": "ash",
+      "style": "Loud, clear American audiobook narrator. Projects strongly, as if reading aloud across a room over engine noise. Crisp consonants, full volume, real energy. Never soft, breathy, sleepy or lilting.",
       "bio": "Tells the story of the forest, the path, and the light through the leaves. Speaks to the listener as 'you'. Describes the world, never your choices.",
       "condition": "Steady."
     },
     "wolf": {
-      "voice": "ash",
+      "voice": "shimmer",
       "style": "Bright and theatrical, delighted with his own cleverness. Clear and well-paced, never rushed.",
       "bio": "A clever wolf who talks his way through the world rather than fighting it. Vain, funny, and a terrible liar who believes he is a wonderful one. More trickster than monster, and genuinely delighted to meet someone worth talking to.",
       "condition": "Trotting alongside you, pleased with himself."

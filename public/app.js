@@ -16,6 +16,7 @@ const IDLE_MS = 25000;       // hands-on mode: how long before we prod you
 const ANSWER_MS = 5000;      // driver mode: how long we listen before asking again
 const SETTLE_MS = 1000;      // driver mode: one second of quiet means they have finished
 const MIC_GAP_MS = 100;      // fallback only; the real speaker lag is measured, see speakerLagMs()
+const UNKNOWN_LAG_MS = 350;  // used when the browser cannot measure it (remote desktops report 0)
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
 let starting = false;        // a microphone is being opened right now; do not open a second
@@ -156,28 +157,20 @@ function clearAnswerTimers() {
   driver.settle = null;
   driver.wait = null;
   driver.gap = null;
-  micEnabled(true);
-}
-
-/** Cut the microphone feed, or restore it. Silence is how we force a clean break. */
-function micEnabled(on) {
-  const track = driver.stream?.getAudioTracks?.()[0];
-  if (track && track.enabled !== on) track.enabled = on;
-  return !!track;
 }
 
 /**
- * How far the speakers lag behind the code. We do not have to guess this: the browser
- * measures it. "ended" fires when the audio element has handed over its last sample, but
- * that sample is still sitting in the sound card's buffer - outputLatency is exactly how
- * long it takes to come out of the speaker. Bluetooth can be ten times a laptop speaker,
- * which is why a fixed number would be wrong on half the devices.
+ * How far the speakers lag behind the code. "ended" fires when the audio element has handed
+ * over its last sample, but that sample has not reached the driver's ears yet. Where the
+ * browser can measure the delay we use its number. Where it cannot - it reports zero on
+ * remote desktops, and the sound there is travelling over a network - a small guess would
+ * be badly wrong, so we wait a conservative beat instead.
  */
 function speakerLagMs() {
   const ctx = driver.audioCtx;
-  const sec = Number(ctx?.outputLatency) || Number(ctx?.baseLatency) || 0;
-  if (!sec) return MIC_GAP_MS;
-  return Math.min(500, Math.max(40, Math.round(sec * 1000) + 30));   // + a little for the room
+  const sec = Number(ctx?.outputLatency) || 0;
+  if (!sec) return UNKNOWN_LAG_MS;                 // the browser has no idea; assume the worst
+  return Math.min(600, Math.max(80, Math.round(sec * 1000) + 30));   // + a little for the room
 }
 
 /** The story is talking. Nothing you say matters except "stop". */
@@ -192,11 +185,11 @@ function driverTelling() {
 }
 
 /**
- * The characters have stopped. The audio element reports "finished" while its last sample
- * is still travelling through the sound card, so cut the microphone until that sound has
- * genuinely left the speakers - a delay the browser measures for us. Only then does what we
- * hear count as an answer. The microphone stays open the whole time the story is talking,
- * so "stop" and "resume" still work; it is only this last sliver that is muted.
+ * The characters have stopped. The audio element reports "finished" while its last sound is
+ * still on its way to the driver's ears, so nothing counts as an answer until that sound has
+ * actually arrived. We do NOT switch the microphone track off to achieve this: doing so makes
+ * the speech service think the stream has ended, and it closes the session and has to be
+ * rebuilt, which costs a second and a half of total deafness. The phase alone is the gate.
  */
 function driverAwaitAnswer() {
   if (!driver.on || storyOver) return;
@@ -206,11 +199,8 @@ function driverAwaitAnswer() {
   driverHint('\u2026');
 
   driver.gapMs = speakerLagMs();
-  if (!micEnabled(false)) return beginAnswering();     // no track to cut, nothing to wait for
-  driver.gap = setTimeout(() => {
-    micEnabled(true);
-    beginAnswering();
-  }, driver.gapMs);
+  micReport('played', `last line ended; waiting ${driver.gapMs}ms for the speakers`);
+  driver.gap = setTimeout(beginAnswering, driver.gapMs);
 }
 
 function beginAnswering() {
@@ -218,11 +208,16 @@ function beginAnswering() {
   driver.phase = 'answering';
   driver.buffer = '';
   driver.quietSince = Date.now();
-  driver.askedAt = Date.now();
+  // The question was asked once. A nudge repeats it, so it must not restart the clock -
+  // otherwise a driver who took twenty seconds and a nudge is recorded as having answered
+  // in two. Only a genuinely new question clears this, when the answer is sent.
+  if (!driver.askedAt) driver.askedAt = Date.now();
+  driver.spokeAt = 0;
   driver.sawInterim = false;
   driver.heardSound = false;
   driver.peak = 0;
   driver.utterStart = 0;
+  micReport('listening', 'microphone window open');
 
   if (driver.pending) {                      // they answered while an urge was in flight
     const held = driver.pending;
@@ -304,11 +299,13 @@ function driverHeard(text, final, startMs) {
   driver.wait = null;
 
   if (!final) {
+    if (!driver.spokeAt) driver.spokeAt = Date.now();   // the moment they started answering
     ui.heard.textContent = (driver.buffer + ' ' + text).trim();
     driverHint('Listening\u2026', 'live');
     return;
   }
 
+  if (!driver.spokeAt) driver.spokeAt = Date.now();
   driver.buffer = (driver.buffer + ' ' + text).trim();
   ui.heard.textContent = driver.buffer;
 
@@ -364,36 +361,6 @@ function finishStory() {
    Every turn gets an epoch. Anything belonging to an older epoch is ignored, so a turn that
    is still playing when the next one starts cannot corrupt the new turn's position.        */
 
-/* ---------------- playback volume ----------------
-   The narrator reads in a level, unexcited voice, which comes back noticeably quieter than
-   the characters - and in a moving car, quieter means unintelligible. An audio element
-   cannot go above its own full volume, so the narrator is routed through a gain stage that
-   can. If the audio engine is not awake yet we simply skip the boost: a slightly quiet
-   narrator is survivable, a silent one is not.                                           */
-const LOUDER = { narrator: 2.6 };
-let playCtx = null;
-
-/** Browsers only let sound start from a click, so open the audio engine on one. */
-function wakeAudio() {
-  try {
-    playCtx ||= new (window.AudioContext || window.webkitAudioContext)();
-    if (playCtx.state === 'suspended') playCtx.resume().catch(() => {});
-  } catch { /* no boost on this browser */ }
-}
-
-function boost(el, voice) {
-  const gain = LOUDER[voice];
-  if (!gain) return;
-  try {
-    playCtx ||= new (window.AudioContext || window.webkitAudioContext)();
-    if (playCtx.state === 'suspended') playCtx.resume().catch(() => {});
-    if (playCtx.state !== 'running') return;          // would route the sound into nothing
-    const node = playCtx.createGain();
-    node.gain.value = gain;
-    playCtx.createMediaElementSource(el).connect(node).connect(playCtx.destination);
-  } catch { /* leave the element on its own output */ }
-}
-
 const queue = {
   epoch: 0,
   items: new Map(),   // idx -> { kind, src }
@@ -440,10 +407,9 @@ const queue = {
     this.checkDone();
   },
 
-  sound(src, voice) {
+  sound(src) {
     return new Promise((resolve) => {
       const a = new Audio(src);
-      boost(a, voice);
       this.current = a;
       // Keep a running mark of "the speakers were live until now", so we can throw away
       // anything the microphone picked up while they were talking.
@@ -468,7 +434,6 @@ const queue = {
       finishStory();
     } else {
       setStatus('your turn', 'live');
-      driver.askedAt = Date.now();         // the question has finished; start the clock
       armIdle();
       driverAwaitAnswer();
     }
@@ -694,8 +659,10 @@ function connect() {
 function say(text) {
   if (!text?.trim() || storyOver || ws?.readyState !== WebSocket.OPEN) return;
   // How long they took to answer, and how much prodding it needed. A driver who is
-  // nodding off gets slower and shorter, and the story needs to know.
-  const replyMs = driver.askedAt ? Date.now() - driver.askedAt : 0;
+  // nodding off gets slower and shorter, and the story needs to know. What counts is how
+  // long before they START talking - measuring to the end would make a long, chatty,
+  // wide-awake answer look like a slow one, and would include the settling pause too.
+  const replyMs = driver.askedAt ? (driver.spokeAt || Date.now()) - driver.askedAt : 0;
   const urges = driver.urges;
   driver.askedAt = 0;
   cancelIdle();
@@ -1029,7 +996,6 @@ ui.restart.onclick = () => location.reload();
 
 ui.startBtn.onclick = async () => {
   if (!chosenStory) return;
-  wakeAudio();                 // a click is the browser's cue to allow sound; use it
   driver.on = !!ui.driverToggle?.checked;
   ui.startBtn.disabled = true;
   ui.startBtn.textContent = 'Starting…';
