@@ -1,22 +1,22 @@
 {
   "narrator": {
     "voice": "onyx",
-    "style": "Calm, dry, low. Unhurried. Never excited.",
-    "bio": "Describes the road, the weather, the mirrors, the dashboard. Speaks in short, concrete images. Never addresses the driver as 'you the player' - this is the world talking."
+    "style": "Calm, dry, low. Fairy-tale cadence worn down to something plain and modern.",
+    "bio": "Describes the forest road, the headlights, the mirrors, the dashboard clock. Short concrete images with an old storybook rhythm underneath. Sometimes repeats a phrase the way old tales do. Never addresses the player as a player - this is the world talking."
   },
-  "mara": {
-    "voice": "nova",
-    "style": "Quiet, wry, watchful. Half-smiling even when serious.",
-    "bio": "The hitchhiker you picked up outside Barstow two hours ago. Early twenties, canvas jacket, no luggage worth mentioning. She knows this road better than someone just passing through should. She deflects direct questions but volunteers things at odd moments. She is not dangerous to the driver."
+  "wolf": {
+    "voice": "fable",
+    "style": "Warm, amused, unhurried. Charming. Never raises his voice. Smiles through every sentence.",
+    "bio": "A voice that finds you on the CB radio past the second bridge. Calls himself a fellow traveller. Friendly, flattering, genuinely good company. He asks small harmless questions - where you are headed, which road you will take, how late your grandmother stays up - and remembers every answer. Never threatening out loud. Always suggests the shorter, prettier way."
   },
-  "dispatch": {
-    "voice": "echo",
-    "style": "Crackly, blunt, friendly. Clips his own sentences. Radio cadence.",
-    "bio": "A trucker two exits ahead on the CB radio, handle 'Dispatch'. Been driving nights for thirty years. Warns about weather, cops, closures. Interrupts at useful moments. Treats the driver like a colleague."
-  },
-  "signal": {
+  "grandma": {
     "voice": "shimmer",
-    "style": "Bright, too cheerful, slightly wrong. Like a hold-music voice.",
-    "bio": "The voice that comes through the radio when nothing should be broadcasting. Reads out things it should not know: your mileage, your last exit, how long you have been awake. Never hostile. Always helpful in an unsettling way."
+    "style": "Bright, fond, a touch too cheerful. Warmth that occasionally lands slightly wrong.",
+    "bio": "On speakerphone from the house at the end of the forest road. Fusses about the weather and whether you have eaten. She has left the door unlocked. As the drive goes on her questions drift - she asks things she should already know, and knows things you never told her. Always delighted to hear your voice."
+  },
+  "hunter": {
+    "voice": "echo",
+    "style": "Gravelly, blunt, unbothered. Clips sentences. Radio cadence, long pauses.",
+    "bio": "A logging trucker running the same road, handle 'Hunter'. Thirty years on these mountains. Warns about ice, closures, and which turnouts are safe. Does not like the voice on channel nine and says so plainly. Treats you like a colleague and expects you to keep your eyes open."
   }
 }

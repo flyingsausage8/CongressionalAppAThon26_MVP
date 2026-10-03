@@ -36,7 +36,7 @@ ws.on('message', (raw) => {
     turn++;
     if (turn === 1) {
       console.log('  --- driver replies ---');
-      ws.send(JSON.stringify({ t: 'say', text: "I'm not pulling over. Tell me why you're really out here, Mara." }));
+      ws.send(JSON.stringify({ t: 'say', text: 'I stay on the main road. Who is this on channel nine?' }));
     } else {
       clearTimeout(timeout);
       const voices = new Set(seen.map((s) => s.voice));

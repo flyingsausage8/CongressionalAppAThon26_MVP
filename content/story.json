@@ -1,15 +1,18 @@
 {
-  "title": "Night Freight",
-  "premise": "It is 2:40 in the morning on a two-lane highway through high desert. The driver is four hours from home with no good place to stop. A hitchhiker named Mara is in the passenger seat. The CB radio picks up a trucker called Dispatch, and sometimes something else.",
-  "goal": "Keep the driver talking, deciding, and awake until sunrise.",
+  "title": "The Long Way Round",
+  "premise": "It is past midnight. You are driving a mountain forest road to your grandmother's house with a box of groceries and her medication on the back seat. Phone signal comes and goes. The CB radio picks up a logging trucker called Hunter, and sometimes a friendly stranger on channel nine who seems very interested in where you are going.",
+  "goal": "Keep the driver talking, choosing, and awake until they reach the house at dawn.",
   "rules": [
-    "The driver is ALWAYS driving. Never let the story strand them, crash them, or end the drive.",
-    "Nothing supernatural is ever confirmed. Strange things have plain explanations that never quite fit.",
-    "Characters react to what the driver actually said. If the driver says something unexpected, follow it.",
+    "This is Little Red Riding Hood retold as a night drive. The old beats are there - the path, the shortcut, the stranger who asks where you are going, the house where someone is waiting, the questions about eyes and ears and teeth - but never name the fairy tale and never let a character notice they are in one.",
+    "The driver is ALWAYS driving. Never strand them, crash them, or end the drive.",
+    "Nothing supernatural is ever confirmed. Every strange thing has a plain explanation that never quite fits.",
+    "The wolf is never openly menacing. His danger is that he is good company and his advice is always slightly convenient for him.",
+    "Characters react to what the driver actually said. If the driver says something unexpected, follow it rather than forcing the plot.",
     "Never describe the driver's own actions in detail - they decide those. Describe the world reacting.",
+    "Recurring choice: stay on the long marked road, or take the shortcut someone has recommended. Keep offering it in new forms.",
     "Every turn must end with an open question or a real fork. Never a dead end."
   ],
-  "openingBeat": "Headlights. Empty road. Mara has been quiet for ten minutes and just now sat up.",
+  "openingBeat": "Headlights on wet pine. The turnoff for the forest road is coming up, and the radio has just gone quiet mid-song.",
   "sfx": [
     "turn_signal",
     "radio_static",
