@@ -1,0 +1,19 @@
+node_modules/
+dist/
+build/
+
+# secrets - never commit
+.env
+.env.*
+!.env.example
+*.key
+
+# generated audio
+audio-cache/
+*.wav
+*.mp3
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
