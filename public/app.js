@@ -27,6 +27,9 @@ const driver = {
   phase: 'idle',    // idle | telling | answering | paused
   buffer: '',
   pending: '',      // an answer that arrived while we were still talking
+  quietSince: 0,    // when the speakers actually went silent
+  lastPlayEnd: 0,   // wall clock of the last audio frame we played
+  micT0: 0,         // wall clock of when the recogniser session started
   settle: null,
   wait: null,
   urges: 0,
@@ -61,6 +64,25 @@ function isEcho(text) {
   return now.includes(String(text).toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').trim());
 }
 
+/** Same idea, but against everything the characters have said so far this turn. */
+function isEchoOfTurn(text) {
+  const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const t = norm(text);
+  if (!t) return true;
+
+  // One blob, because the mic often transcribes several lines as a single run of speech.
+  const blob = norm(spokenThisTurn.join(' '));
+  if (!blob) return false;
+  if (blob.includes(t)) return true;
+
+  // Speech recognition mangles the odd word, so fall back to how much of it we recognise.
+  const words = t.split(' ');
+  if (words.length < 3) return false;
+  const have = new Set(blob.split(' '));
+  const hits = words.filter((w) => have.has(w)).length;
+  return hits / words.length >= 0.7;
+}
+
 function driverHint(text, cls = '') {
   ui.driverHint.textContent = text;
   ui.driverBar.className = 'driverBar ' + cls;
@@ -90,8 +112,9 @@ function driverAwaitAnswer() {
   clearAnswerTimers();
   driver.phase = 'answering';
   driver.buffer = '';
+  driver.quietSince = Date.now();
 
-  if (driver.pending) {                      // they did answer - we just talked over them
+  if (driver.pending) {                      // they answered while an urge was in flight
     const held = driver.pending;
     driver.pending = '';
     driver.urges = 0;
@@ -112,8 +135,13 @@ function urgeAgain() {
 }
 
 /** Everything the mic hears while driver mode is on comes through here. */
-function driverHeard(text, final) {
+function driverHeard(text, final, startMs) {
   if (!driver.on || !text.trim()) return;
+
+  // Did this speech begin while the characters were still sounding? If so it belongs to
+  // the telling phase - it is either the speakers bleeding into the mic, or words we have
+  // already decided to ignore. Either way it is never an answer.
+  const overlapped = startMs ? startMs < driver.lastPlayEnd - 150 : queue.playing && !queue.paused;
 
   if (driver.phase === 'paused') {
     if (final && isCommand(text, GO_WORDS)) {
@@ -135,11 +163,19 @@ function driverHeard(text, final) {
 
   if (driver.phase !== 'answering') return;
 
+  if (final) {
+    if (overlapped) return;
+    // Fallback for when the recogniser gives us no timings: a result that lands right as
+    // the speakers stop, made of their words, is the tail of their line.
+    if (Date.now() - driver.quietSince < 600 && isEchoOfTurn(text)) return;
+  }
+
   clearTimeout(driver.wait);                 // they are speaking, so stop counting down
   driver.wait = null;
 
   if (!final) {
     ui.heard.textContent = (driver.buffer + ' ' + text).trim();
+    driverHint('Listening\u2026', 'live');
     return;
   }
 
@@ -152,7 +188,6 @@ function driverHeard(text, final) {
     driver.buffer = '';
     if (isRealAnswer(answer)) {
       driver.urges = 0;
-      driverTelling();
       say(answer);
     } else {
       driverHint('Didn\u2019t catch that', 'err');
@@ -234,7 +269,12 @@ const queue = {
     return new Promise((resolve) => {
       const a = new Audio(src);
       this.current = a;
+      // Keep a running mark of "the speakers were live until now", so we can throw away
+      // anything the microphone picked up while they were talking.
+      const tick = setInterval(() => { driver.lastPlayEnd = Date.now(); }, 100);
       const fin = () => {
+        clearInterval(tick);
+        driver.lastPlayEnd = Date.now();
         if (this.current === a) this.current = null;
         resolve();
       };
@@ -273,6 +313,7 @@ const queue = {
     this.playing = false;
     this.paused = false;
     this.nowText = '';
+    spokenThisTurn.length = 0;
     this.stop();
   },
 
@@ -308,12 +349,14 @@ const queue = {
 
 /** What each line actually says, so we can tell the speakers apart from the driver. */
 const lineText = new Map();
+const spokenThisTurn = [];
 
 function addLine(epoch, idx, line) {
   const el = document.createElement('div');
   el.className = 'ln';
   el.dataset.key = `${epoch}:${idx}`;
   lineText.set(`${epoch}:${idx}`, line.text);
+  spokenThisTurn.push(line.text);
   const name = line.as || line.voice;
   const tone = line.tone ? ` <span class="tone">(${esc(line.tone)})</span>` : '';
   el.innerHTML = `<span class="who v-${esc(line.voice)}">${esc(name)}</span>${esc(line.text)}${tone}`;
@@ -478,23 +521,59 @@ async function initSpeech() {
 }
 
 /** Driver mode: one recogniser, opened once, never closed until the story ends. */
-function startAlwaysListening() {
+async function startAlwaysListening() {
   if (listening || !speechCfg) return;
   const SDK = window.SpeechSDK;
-  recognizer = new SDK.SpeechRecognizer(speechCfg, SDK.AudioConfig.fromDefaultMicrophoneInput());
 
-  recognizer.recognizing = (_s, e) => driverHeard(e.result.text || '', false);
+  // Ask the browser for an echo-cancelled stream. Without this the microphone hears the
+  // characters through the speakers and we submit the story's own words as your answer.
+  let audioCfg;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+    audioCfg = SDK.AudioConfig.fromStreamInput(stream);
+  } catch (err) {
+    console.warn('no echo-cancelled stream, falling back', err);
+    audioCfg = SDK.AudioConfig.fromDefaultMicrophoneInput();
+  }
+
+  recognizer = new SDK.SpeechRecognizer(speechCfg, audioCfg);
+  driver.micT0 = Date.now();
+
+  recognizer.recognizing = (_s, e) => driverHeard(e.result.text || '', false, startOf(e));
   recognizer.recognized = (_s, e) => {
     if (e.result.reason === SDK.ResultReason.RecognizedSpeech && e.result.text) {
-      driverHeard(e.result.text, true);
+      driverHeard(e.result.text, true, startOf(e));
     }
   };
-  recognizer.canceled = () => { listening = false; };
+  recognizer.sessionStarted = () => { driver.micT0 = Date.now(); };
+  recognizer.canceled = (_s, e) => {
+    console.warn('recognition canceled', e.errorDetails || e.reason);
+    relisten();
+  };
+  recognizer.sessionStopped = () => relisten();
 
   recognizer.startContinuousRecognitionAsync();
   listening = true;
   ui.driverBar.hidden = false;
   driverHint('Listening');
+}
+
+/** Wall-clock time the speech in this result began. */
+function startOf(e) {
+  const off = Number(e?.result?.offset);
+  return Number.isFinite(off) && off > 0 ? driver.micT0 + off / 10000 : 0;
+}
+
+/** The mic must never quietly die on a driver. */
+function relisten() {
+  if (!driver.on || storyOver || !listening) return;
+  listening = false;
+  const old = recognizer;
+  recognizer = null;
+  try { old?.close(); } catch { /* already gone */ }
+  setTimeout(() => { if (driver.on && !storyOver) startAlwaysListening(); }, 600);
 }
 
 function stopAlwaysListening() {
