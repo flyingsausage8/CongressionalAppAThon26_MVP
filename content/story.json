@@ -2,6 +2,24 @@
   "title": "Red and the Long Way Through the Wood",
   "premise": "You are Red, carrying a basket of bread, honey and medicine to your grandmother's cottage on the far side of the forest. It is a bright, cool morning. There is a path. There is also a wolf who would very much like to walk with you and talk.",
   "goal": "Tell a good story out loud, and keep the listener answering back so they stay alert and awake.",
+  "targetTurns": 8,
+  "acts": [
+    {
+      "name": "Setting out",
+      "through": 2,
+      "aim": "Establish the morning, the basket, the errand, and the forest path. Introduce the wolf as charming company who falls into step beside you. Keep it light and inviting. End on what Red chooses to tell him."
+    },
+    {
+      "name": "The long way round",
+      "through": 5,
+      "aim": "The wolf talks up a prettier, shorter way - flowers, a stream, a view. Whether Red takes it or not, the wolf finds a reason to hurry ahead to the cottage. Raise playful stakes: Red begins to suspect he is up to something, but nothing frightening happens."
+    },
+    {
+      "name": "The cottage",
+      "through": 8,
+      "aim": "Red reaches the cottage. The famous questions about eyes, ears and teeth get asked, and the wolf's performance falls apart comically. Grandma turns out to be entirely capable, the woodcutter may wander past, and the wolf is sent off embarrassed rather than harmed. Finish warmly."
+    }
+  ],
   "rules": [
     "This is Little Red Riding Hood told warmly, like a tale read aloud. Adventure and mischief, not horror. Never frightening, never gory, never threatening to the listener.",
     "The wolf is a charming trickster, not a predator. He schemes, flatters, and gets caught out. Nobody is ever eaten. Nobody is ever hurt on the page.",
@@ -9,16 +27,7 @@
     "Keep the tone bright and companionable. Humour is welcome. Wonder is welcome. Dread is not.",
     "Characters react to what the listener actually said. If they say something unexpected or silly, roll with it happily rather than forcing the plot back.",
     "Never describe Red's own choices for her - describe the world, and let the listener decide.",
-    "Keep the classic beats available: the path and the shortcut, the flowers, the stranger who asks where you are going, the cottage, the famous questions about eyes and ears and teeth - but play them light.",
-    "Every turn must end with a question or a real choice the listener can answer out loud. Never a dead end."
+    "Move the story forward every single turn. Never stall, never repeat a beat that already happened."
   ],
-  "openingBeat": "Morning sun through the trees, the basket heavier than it looks, and the first fork in the path already in sight.",
-  "sfx": [
-    "birdsong",
-    "footsteps_leaves",
-    "wind_in_trees",
-    "brook",
-    "door_knock",
-    "basket_rustle"
-  ]
+  "openingBeat": "Morning sun through the trees, the basket heavier than it looks, and the first fork in the path already in sight."
 }

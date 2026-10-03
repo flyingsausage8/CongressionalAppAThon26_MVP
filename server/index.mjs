@@ -93,5 +93,5 @@ wss.on('connection', (ws) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`\n  Night Freight running at  http://localhost:${PORT}\n`);
+  console.log(`\n  ${storyInfo.title} running at  http://localhost:${PORT}\n`);
 });

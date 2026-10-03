@@ -26,15 +26,17 @@
     <div id="statusBar">
       <span id="dot" class="dot"></span>
       <span id="status">connecting</span>
-      <label class="nudgeToggle"><input type="checkbox" id="nudge" checked> nudge me if I go quiet</label>
+      <span id="progress" class="progress"></span>
+      <label class="nudgeToggle"><input type="checkbox" id="nudge" checked> nudge me</label>
       <span id="latency"></span>
     </div>
 
     <div id="script" class="script"></div>
 
-    <div id="heard" class="heard"><span class="you">you</span><span id="heardText"></span></div>
+    <div id="heard" class="heard"><span id="heardText"></span></div>
 
     <div class="controls">
+      <button id="restartBtn" class="big" hidden>Tell it again</button>
       <button id="micBtn" class="mic">Hold to talk</button>
       <form id="typeForm" class="typeForm">
         <input id="typeInput" placeholder="…or type what you say" autocomplete="off">

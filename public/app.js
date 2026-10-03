@@ -5,17 +5,29 @@ const ui = {
   game: $('game'), script: $('script'), status: $('status'), dot: $('dot'),
   latency: $('latency'), heard: $('heardText'), micBtn: $('micBtn'),
   form: $('typeForm'), input: $('typeInput'), nudge: $('nudge'),
+  progress: $('progress'), restart: $('restartBtn'),
 };
 
-const SFX_NAMES = ['birdsong', 'footsteps_leaves', 'wind_in_trees', 'brook', 'door_knock', 'basket_rustle'];
+const SFX_NAMES = [];
 const IDLE_MS = 25000;
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
+let storyOver = false;
 const sfxCache = new Map();
 
 function setStatus(text, cls = '') {
   ui.status.textContent = text;
   ui.dot.className = 'dot ' + cls;
+}
+
+function finishStory() {
+  cancelIdle();
+  addEnding();
+  setStatus('finished', '');
+  ui.micBtn.disabled = true;
+  ui.micBtn.textContent = 'The story is over';
+  ui.input.disabled = true;
+  ui.restart.hidden = false;
 }
 
 /* ---------------- playback queue: TTS runs in parallel, audio plays in order -------------
@@ -83,8 +95,12 @@ const queue = {
   checkDone() {
     if (this.total === null || this.playing) return false;
     if (this.next < this.total || this.items.size) return false;
-    setStatus('your move', 'live');
-    armIdle();
+    if (storyOver) {
+      finishStory();
+    } else {
+      setStatus('your turn', 'live');
+      armIdle();
+    }
     return true;
   },
 
@@ -118,14 +134,27 @@ const queue = {
 
 function addLine(epoch, idx, line) {
   const el = document.createElement('div');
-  el.className = 'ln' + (line.voice === 'sfx' ? ' sfxline' : '');
+  el.className = 'ln';
   el.dataset.key = `${epoch}:${idx}`;
-  if (line.voice === 'sfx') {
-    el.textContent = `[ ${line.name.replace(/_/g, ' ')} ]`;
-  } else {
-    const tone = line.tone ? ` <span class="tone">(${esc(line.tone)})</span>` : '';
-    el.innerHTML = `<span class="who">${esc(line.voice)}</span>${esc(line.text)}${tone}`;
-  }
+  const tone = line.tone ? ` <span class="tone">(${esc(line.tone)})</span>` : '';
+  el.innerHTML = `<span class="who v-${esc(line.voice)}">${esc(line.voice)}</span>${esc(line.text)}${tone}`;
+  ui.script.appendChild(el);
+  el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+/** Your own answers stay in the transcript, in order, between the story beats. */
+function addYou(text) {
+  const el = document.createElement('div');
+  el.className = 'ln you-line done';
+  el.innerHTML = `<span class="who">you</span>${esc(text)}`;
+  ui.script.appendChild(el);
+  el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function addEnding() {
+  const el = document.createElement('div');
+  el.className = 'theEnd';
+  el.textContent = 'The End';
   ui.script.appendChild(el);
   el.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
@@ -185,11 +214,13 @@ function connect() {
       });
       setStatus('playing', 'live');
     } else if (m.t === 'sfx') {
-      queue.add(queue.epoch, m.idx, { kind: 'audio', src: sfxCache.get(m.name) || `sfx/${m.name}.wav` });
+      queue.add(queue.epoch, m.idx, { kind: 'skip' });
     } else if (m.t === 'audioError') {
       queue.add(queue.epoch, m.idx, { kind: 'skip' });
     } else if (m.t === 'turnEnd') {
-      ui.latency.textContent = m.firstAudioMs ? `first audio ${m.firstAudioMs}ms` : '';
+      ui.latency.textContent = m.firstAudioMs ? `${m.firstAudioMs}ms` : '';
+      if (m.act) ui.progress.textContent = `${m.act} · ${m.turn}/${m.total}`;
+      storyOver = !!m.done;
       queue.endTurn(queue.epoch, m.idx);
     } else if (m.t === 'error') {
       setStatus('error: ' + m.message, 'err');
@@ -199,9 +230,10 @@ function connect() {
 }
 
 function say(text) {
-  if (!text?.trim() || ws?.readyState !== WebSocket.OPEN) return;
+  if (!text?.trim() || storyOver || ws?.readyState !== WebSocket.OPEN) return;
   cancelIdle();
-  ui.heard.textContent = text;
+  addYou(text.trim());
+  ui.heard.textContent = '';
   ws.send(JSON.stringify({ t: 'say', text }));
 }
 
@@ -270,13 +302,9 @@ fetch('/api/cast')
   .then((d) => { ui.premise.textContent = d.story.premise; })
   .catch(() => { ui.premise.textContent = 'A basket, a forest path, and a wolf who would like a word.'; });
 
-// preload sound effects so they fire with zero network delay
-for (const n of SFX_NAMES) {
-  fetch(`sfx/${n}.wav`)
-    .then((r) => r.blob())
-    .then((b) => sfxCache.set(n, URL.createObjectURL(b)))
-    .catch(() => {});
-}
+// preload nothing - the story has no sound effects
+
+ui.restart.onclick = () => location.reload();
 
 ui.startBtn.onclick = async () => {
   ui.startBtn.disabled = true;

@@ -4,8 +4,12 @@ import { WebSocket } from 'ws';
 
 const REPLIES = [
   'I stay on the path. Who are you, exactly?',
-  'I pick some flowers for Grandma, but I keep walking.',
-  'Grandma, what big eyes you have! Have you been up all night gardening again?',
+  'Sure, you can walk with me. But I am not telling you where I am going.',
+  'Those flowers do look nice. Maybe just a few for Grandma.',
+  'Wait, why are you running off all of a sudden?',
+  'I knock on the door and call out for Grandma.',
+  'Grandma, what big eyes you have! And why are you wearing her glasses upside down?',
+  'I think the woodcutter is right outside. Should I call him in?',
 ];
 
 const ws = new WebSocket('ws://localhost:3000/ws');
@@ -42,21 +46,24 @@ ws.on('message', (raw) => {
 
     const ok = cur.lines.length > 0 && ordered && cur.audio === speech;
     console.log(
-      `  turn ${n}: ${String(cur.lines.length).padStart(2)} lines | idx 0..${m.idx - 1} ${ordered ? 'ok' : 'OUT OF ORDER'} | ` +
-      `audio ${cur.audio}/${speech} | ${m.firstAudioMs}ms first | ${voices}  ${ok ? 'PASS' : 'FAIL'}`,
+      `  ${String(n).padStart(2)}/${m.total}  ${String(m.act || '').padEnd(20)} ${cur.lines.length} lines | ` +
+      `audio ${cur.audio}/${speech} | ${String(m.firstAudioMs).padStart(4)}ms | ${voices}  ${ok ? 'ok' : 'FAIL'}` +
+      (m.done ? '   <- THE END' : ''),
     );
     turns.push({ ...cur, ok, total: m.idx });
 
-    if (turns.length <= REPLIES.length) {
-      startTurn();
-      ws.send(JSON.stringify({ t: 'say', text: REPLIES[turns.length - 1] }));
-    } else {
+    if (m.done) {
       clearTimeout(timeout);
       const bad = turns.filter((t) => !t.ok).length;
-      console.log(`\n  ${turns.length} turns, ${bad} failed\n`);
+      const allVoices = new Set(turns.flatMap((t) => t.lines.map((l) => l.voice)));
+      console.log(`\n  story ended after ${turns.length} exchanges, ${bad} failed`);
+      console.log(`  voices used: ${[...allVoices].join(', ')}\n`);
       ws.close();
       process.exit(bad ? 1 : 0);
     }
+
+    startTurn();
+    ws.send(JSON.stringify({ t: 'say', text: REPLIES[(turns.length - 1) % REPLIES.length] }));
   }
 });
 
