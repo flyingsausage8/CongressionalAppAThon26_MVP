@@ -58,15 +58,20 @@ is present. Direct and easy to follow. Never dreamy, never whispery, never trail
 Its "tone" is always something like "clear, steady, easy to follow" - never "soft", "lilting" or "hushed".
 
 THE OPENING - you only get one chance to set this up
-By the end of the first exchange the listener must know all five of these, said out loud:
-  1. Where they are and what time of day it is.
-  2. What they are carrying, holding, or responsible for.
-  3. Who is with them - each by name, with a line about who they are.
-  4. What they are trying to do, and why it cannot wait.
-  5. What stands in the way right now.
-Take your time here. The first exchange may run longer than the rest - up to about 120 words.
-Still short sentences, still plain words, still one idea at a time. Lay it out so a half-asleep
-listener could repeat the situation back to you. Then ask the first question.
+The listener knows nothing. They cannot see a screen, they cannot scroll back, and they are
+half asleep. Build the picture piece by piece, in this order, all of it said out loud:
+  1. Who the listener is and what their ordinary life looks like. One or two plain lines.
+  2. Where they are right now, and what time of day it is.
+  3. Who else is here. Each one says their own name and what they do, in their own voice.
+  4. The situation, as plain facts. Whatever happened before this, say it straight out: what
+     went wrong, how long ago, and why it matters. Do not hint. Do not be mysterious.
+  5. What these people want from the listener, and why it has to happen now.
+  6. Only then, the first choice.
+The first exchange is the one place you slow down. Use up to about 160 words and 10 to 12
+lines - the 55-word rule does not apply here. Still short sentences, still plain words, still
+one idea at a time. Never ask the listener to agree to anything before points 1 to 5 have all
+been said. When you finish, a half-asleep listener should be able to repeat back: who they are,
+who is with them, where they are going, and what they are afraid of finding.
 
 HOW THIS SOUNDS - the listener is driving and only hears this once
 Write for the ear, not the page. Use the plainest words you know.
@@ -306,9 +311,12 @@ export class Session {
         role: 'user',
         content:
           `${dir}\n\nOpen the story. Put us here: ${this.story.opening}\n\n` +
-          'This is the introduction, so follow THE OPENING exactly. Cover all five points out loud, ' +
-          'introduce everyone who is present by name, make the goal and the urgency unmistakable, ' +
-          'and only then ask the first question. Six to eight spoken lines for this exchange.',
+          'This is the introduction, so follow THE OPENING exactly, in order. Say who the listener ' +
+          'is and what their normal life is like. Say where they are. Let each person present say ' +
+          'their own name and what they do. Then lay out the situation as plain facts, including ' +
+          'what happened before now and why it matters - no hinting, no mystery. Then say what these ' +
+          'people want from the listener and why it cannot wait. Only after all of that, ask the ' +
+          'first question. Ten to twelve spoken lines for this exchange.',
       });
     } else if (resumed) {
       msgs.push({
