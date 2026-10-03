@@ -11,8 +11,8 @@
   "maxTurns": 14,
   "cast": {
     "narrator": {
-      "voice": "fable",
-      "style": "Clear, warm audiobook narrator. Well-projected and easy to follow at speed, with crisp consonants and real energy. Never soft, sleepy or lilting.",
+      "voice": "sage",
+      "style": "Clear, warm American audiobook narrator. Well-projected and easy to follow at speed, with crisp consonants and real energy. Never soft, sleepy or lilting.",
       "bio": "Tells the story of the forest, the path, and the light through the leaves. Speaks to the listener as 'you'. Describes the world, never your choices.",
       "condition": "Steady."
     },
@@ -38,7 +38,7 @@
   "extras": [
     {
       "id": "voice_a",
-      "voice": "sage",
+      "voice": "alloy",
       "style": "Calm, level, measured."
     },
     {

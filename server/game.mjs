@@ -57,21 +57,26 @@ It must be the clearest voice in the story - the listener leans on it to know wh
 is present. Direct and easy to follow. Never dreamy, never whispery, never trailing off.
 Its "tone" is always something like "clear, steady, easy to follow" - never "soft", "lilting" or "hushed".
 
-THE OPENING - you only get one chance to set this up
-The listener knows nothing. They cannot see a screen, they cannot scroll back, and they are
-half asleep. Build the picture piece by piece, in this order, all of it said out loud:
-  1. Who the listener is and what their ordinary life looks like. One or two plain lines.
-  2. Where they are right now, and what time of day it is.
-  3. Who else is here. Each one says their own name and what they do, in their own voice.
-  4. The situation, as plain facts. Whatever happened before this, say it straight out: what
-     went wrong, how long ago, and why it matters. Do not hint. Do not be mysterious.
-  5. What these people want from the listener, and why it has to happen now.
-  6. Only then, the first choice.
-The first exchange is the one place you slow down. Use up to about 160 words and 10 to 12
-lines - the 55-word rule does not apply here. Still short sentences, still plain words, still
-one idea at a time. Never ask the listener to agree to anything before points 1 to 5 have all
-been said. When you finish, a half-asleep listener should be able to repeat back: who they are,
-who is with them, where they are going, and what they are afraid of finding.
+THE OPENING - one paragraph, then straight into it
+The listener knows nothing. They cannot see a screen and they cannot scroll back. So the very
+first line is a single narrator paragraph that sets the whole thing up at once. One line in the
+script, not five. In that one paragraph, in this order:
+  1. Who the listener is, where they are, and what time of day it is.
+  2. Everyone who is here, by name, with a few words each on who they are.
+  3. What has happened, said as plain fact - no hinting, no mystery.
+  4. The goal: what they are trying to do, and why it cannot wait.
+About 90 to 120 words. Short sentences inside it, plain words, one idea at a time - the
+under-18-words rule does not apply to this one paragraph, but it must still be easy to follow
+out loud. Explain anything the listener could not already know.
+After that paragraph, each character says ONE short line to introduce themselves in their own
+voice - "I'm Odo. Thirty years carrying messages." Then the first choice. That is the whole
+opening: one narrator paragraph, one line each, one question. Nothing else.
+
+THE ACCENTS - plain American English
+Every voice is plain modern American. Never ask for a British, English, Irish, Scottish, Welsh,
+Australian or any other regional accent, and never write dialogue that forces one - no "aye",
+no "lad", no "bloke", no "shan't". Write the way people actually speak. A "tone" may describe
+age, mood, speed and depth, never nationality.
 
 HOW THIS SOUNDS - the listener is driving and only hears this once
 Write for the ear, not the page. Use the plainest words you know.
@@ -372,12 +377,11 @@ export class Session {
         role: 'user',
         content:
           `${dir}\n\nOpen the story. Put us here: ${this.story.opening}\n\n` +
-          'This is the introduction, so follow THE OPENING exactly, in order. Say who the listener ' +
-          'is and what their normal life is like. Say where they are. Let each person present say ' +
-          'their own name and what they do. Then lay out the situation as plain facts, including ' +
-          'what happened before now and why it matters - no hinting, no mystery. Then say what these ' +
-          'people want from the listener and why it cannot wait. Only after all of that, ask the ' +
-          'first question. Ten to twelve spoken lines for this exchange.',
+          'This is the introduction, so follow THE OPENING exactly. Your FIRST line is one ' +
+          'narrator paragraph of about 90 to 120 words that says who the listener is, where they ' +
+          'are, everyone who is here by name, what has happened as plain fact, and the goal with ' +
+          'its deadline. One line, not several. Then one short self-introduction from each ' +
+          'character in their own voice, then the first choice. Nothing else.',
       });
     } else if (resumed) {
       msgs.push({

@@ -12,8 +12,8 @@ const ui = {
 };
 
 const IDLE_MS = 25000;       // hands-on mode: how long before we prod you
-const ANSWER_MS = 5000;      // driver mode: how long a question waits before we ask again
-const SETTLE_MS = 1200;      // driver mode: silence that means "they have finished talking"
+const ANSWER_MS = 11000;     // driver mode: how long a question waits before we ask again
+const SETTLE_MS = 1600;      // driver mode: silence that means "they have finished talking"
 const MIC_GAP_MS = 100;      // fallback only; the real speaker lag is measured, see speakerLagMs()
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
@@ -49,6 +49,15 @@ const STOP_WORDS = /\b(stop|pause|wait|hold on|quiet|shush)\b/i;
 const GO_WORDS = /\b(resume|continue|carry on|keep going|go on|unpause|play|go ahead)\b/i;
 const FILLER = /^(u+m+|u+h+|e+r+|h+m+|m+h*|a+h+|o+h+|well|like|so|erm)$/i;
 
+/* ---- echo guards, switched OFF --------------------------------------------------------
+   These used to inspect everything the mic heard and try to work out which words came from
+   the speakers. They are no longer used. While the characters talk, the phase is "telling"
+   and nothing except "stop" is kept anyway; and the moment they finish, the microphone is
+   cut until their sound has physically left the speakers, so their last line can no longer
+   get glued onto the front of an answer. The code below is kept, tested, and one flag away
+   in case the muting turns out not to be enough on some device.                          */
+const ECHO_GUARDS = false;
+
 /** Did they actually say something, or just make a noise? */
 function isRealAnswer(text) {
   const words = String(text)
@@ -59,7 +68,11 @@ function isRealAnswer(text) {
   return words.length > 0;
 }
 
-/** A command only counts if it was said on its own - stops characters triggering it. */
+/**
+ * A command only counts if it was said on its own. This one echo check stays on even with
+ * ECHO_GUARDS off: the mic is deliberately left open during playback so "stop" works, and
+ * without it a character saying "Wait." pauses the story on itself and never restarts.
+ */
 function isCommand(text, re) {
   const t = String(text).trim().replace(/[.!?,]+$/, '');
   if (t.split(/\s+/).length > 3 || !re.test(t)) return false;
@@ -218,7 +231,7 @@ function beginAnswering() {
 
   driverHint('Your turn \u2014 just say it', 'live');
   // Ask again, but ease off a little each time rather than nagging on a fixed beat.
-  driver.wait = setTimeout(urgeAgain, ANSWER_MS + Math.min(driver.urges, 4) * 2500);
+  driver.wait = setTimeout(urgeAgain, ANSWER_MS + Math.min(driver.urges, 4) * 4000);
 }
 
 function urgeAgain() {
@@ -242,8 +255,8 @@ function driverHeard(text, final, startMs) {
 
   // Did this speech begin while the characters were still sounding? The microphone is cut
   // for MIC_GAP_MS after the last line, so anything starting before that is theirs, not yours.
-  const overlapped = began < driver.lastPlayEnd + driver.gapMs
-    || (startMs ? startMs < driver.lastPlayEnd - 150 : queue.playing && !queue.paused);
+  const overlapped = ECHO_GUARDS && (began < driver.lastPlayEnd + driver.gapMs
+    || (startMs ? startMs < driver.lastPlayEnd - 150 : queue.playing && !queue.paused));
 
   if (driver.phase === 'paused') {
     if (final && isCommand(text, GO_WORDS)) {
@@ -306,7 +319,7 @@ function driverHeard(text, final, startMs) {
     } else {
       micReport('dropped', `nothing but filler: "${answer}"`);
       driverHint('Didn\u2019t catch that', 'err');
-      driver.wait = setTimeout(urgeAgain, 1500);
+      driver.wait = setTimeout(urgeAgain, 3000);
     }
   }, SETTLE_MS);
 }
@@ -651,9 +664,10 @@ async function initSpeech() {
   const SDK = window.SpeechSDK;
   speechCfg = SDK.SpeechConfig.fromAuthorizationToken(token, region);
   speechCfg.speechRecognitionLanguage = 'en-US';
-  // Decide a sentence has ended sooner than the default, so answers are acted on quickly.
+  // How long a pause means "they have finished". Too short and a mid-sentence breath gets
+  // sent as the whole answer, which is what used to truncate people.
   try {
-    speechCfg.setProperty(SDK.PropertyId.Speech_SegmentationSilenceTimeoutMs, '500');
+    speechCfg.setProperty(SDK.PropertyId.Speech_SegmentationSilenceTimeoutMs, '900');
   } catch { /* older SDK, the default is fine */ }
   // refresh before the 10-minute token expires
   setInterval(async () => {

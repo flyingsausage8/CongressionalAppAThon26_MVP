@@ -11,8 +11,8 @@
   "maxTurns": 22,
   "cast": {
     "narrator": {
-      "voice": "fable",
-      "style": "Clear, warm audiobook narrator. Well-projected and easy to follow at speed, with crisp consonants and real energy. Never soft, sleepy or lilting.",
+      "voice": "sage",
+      "style": "Clear, warm American audiobook narrator. Well-projected and easy to follow at speed, with crisp consonants and real energy. Never soft, sleepy or lilting.",
       "bio": "Tells the tale of the road and the country it crosses. Speaks to the listener as 'you'. Describes the world and what happens in it, never what you decide.",
       "condition": "Steady."
     },
@@ -48,7 +48,7 @@
     },
     {
       "id": "voice_c",
-      "voice": "sage",
+      "voice": "alloy",
       "style": "Calm, level, measured and thoughtful."
     },
     {

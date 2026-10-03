@@ -11,14 +11,14 @@
   "maxTurns": 20,
   "cast": {
     "narrator": {
-      "voice": "fable",
-      "style": "Clear, warm audiobook narrator. Well-projected and easy to follow at speed, with crisp consonants and real energy. Never soft, sleepy or lilting.",
+      "voice": "sage",
+      "style": "Clear, warm American audiobook narrator. Well-projected and easy to follow at speed, with crisp consonants and real energy. Never soft, sleepy or lilting.",
       "bio": "Describes the country, the weather, the light, and the egg. Speaks to the listener as 'you'. Never decides what you do - only what the world does.",
       "condition": "Steady."
     },
     "odo": {
-      "voice": "cedar",
-      "style": "Deep, dry and gravelly, but every word clear. Grumbles constantly. Long pauses. Secretly having the time of his life.",
+      "voice": "onyx",
+      "style": "As deep and low as a voice can go. Gravelly, slow and heavy, but every word clear. Grumbles constantly. Long pauses. Secretly having the time of his life.",
       "bio": "Thirty years a courier, retired two years and bored out of his mind. Knew the dead woman. Knows every road north and every person worth avoiding. Will not admit that his knee is finished, or that he is frightened.",
       "condition": "Road-worn, knee aching, pretending otherwise."
     },
@@ -32,7 +32,7 @@
   "extras": [
     {
       "id": "voice_a",
-      "voice": "onyx",
+      "voice": "cedar",
       "style": "Very deep, slow, heavy. Fills a room."
     },
     {
@@ -47,7 +47,7 @@
     },
     {
       "id": "voice_d",
-      "voice": "sage",
+      "voice": "alloy",
       "style": "Calm, level, measured and thoughtful."
     }
   ],
