@@ -13,7 +13,8 @@ const ui = {
 
 const IDLE_MS = 25000;       // hands-on mode: how long before we prod you
 const ANSWER_MS = 5000;      // driver mode: how long a question waits before we ask again
-const SETTLE_MS = 700;       // driver mode: silence that means "they have finished talking"
+const SETTLE_MS = 1200;      // driver mode: silence that means "they have finished talking"
+const MIC_GAP_MS = 100;      // driver mode: let the speakers finish ringing out before we listen
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
 let storyOver = false;
@@ -35,6 +36,7 @@ const driver = {
   micT0: 0,         // wall clock of when the recogniser session started
   utterStart: 0,    // wall clock of when the current run of speech began
   askedAt: 0,       // wall clock of when the question finished, so we can time the answer
+  gap: null,        // the deliberate stretch of microphone silence between turns
   lastEventAt: 0,   // last sign of life from the microphone
   stream: null,     // the live microphone track, so we can tell if it really died
   settle: null,
@@ -72,13 +74,25 @@ function isEcho(text) {
 }
 
 /** Same idea, but against everything the characters have said so far this turn. */
+const NUMBERS = {
+  zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7',
+  eight: '8', nine: '9', ten: '10', eleven: '11', twelve: '12', thirteen: '13',
+  fourteen: '14', fifteen: '15', sixteen: '16', seventeen: '17', eighteen: '18',
+  nineteen: '19', twenty: '20', thirty: '30', forty: '40', fifty: '50', hundred: '100',
+};
+
 function normWords(s) {
   return String(s)
     .toLowerCase()
     .replace(/[\u2018\u2019]/g, "'")          // curly apostrophes, which the recogniser likes
     .replace(/[^a-z0-9' ]+/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    // The script writes "two silver" and the recogniser hears "2 silver". Left unmatched,
+    // a whole question slips past the echo check and gets sent back as the answer.
+    .split(' ')
+    .map((w) => NUMBERS[w] || w)
+    .join(' ');
 }
 
 function isEchoOfTurn(text) {
@@ -121,8 +135,18 @@ function driverHint(text, cls = '') {
 function clearAnswerTimers() {
   clearTimeout(driver.settle);
   clearTimeout(driver.wait);
+  clearTimeout(driver.gap);
   driver.settle = null;
   driver.wait = null;
+  driver.gap = null;
+  micEnabled(true);
+}
+
+/** Cut the microphone feed, or restore it. Silence is how we force a clean break. */
+function micEnabled(on) {
+  const track = driver.stream?.getAudioTracks?.()[0];
+  if (track && track.enabled !== on) track.enabled = on;
+  return !!track;
 }
 
 /** The story is talking. Nothing you say matters except "stop". */
@@ -136,13 +160,33 @@ function driverTelling() {
   driverHint('Say \u201cstop\u201d to pause');
 }
 
-/** A question has just landed. Wait, then ask again if nothing comes back. */
+/**
+ * The characters have stopped. The audio element reports "finished" a moment before the
+ * sound has actually left the speakers, so cut the microphone for a tenth of a second and
+ * let that tail pass. Only then does anything heard count as an answer. The microphone
+ * stays open the whole time the story is talking, so "stop" and "resume" still work - it
+ * is only this last sliver, after the final line, that is muted.
+ */
 function driverAwaitAnswer() {
   if (!driver.on || storyOver) return;
   clearAnswerTimers();
+  driver.phase = 'gap';
+  driver.buffer = '';
+  driverHint('\u2026');
+
+  if (!micEnabled(false)) return beginAnswering();     // no track to cut, nothing to wait for
+  driver.gap = setTimeout(() => {
+    micEnabled(true);
+    beginAnswering();
+  }, MIC_GAP_MS);
+}
+
+function beginAnswering() {
+  if (!driver.on || storyOver) return;
   driver.phase = 'answering';
   driver.buffer = '';
   driver.quietSince = Date.now();
+  driver.askedAt = Date.now();
   driver.sawInterim = false;
   driver.heardSound = false;
   driver.peak = 0;
@@ -180,9 +224,9 @@ function driverHeard(text, final, startMs) {
   const began = driver.utterStart;
   if (final) driver.utterStart = 0;
 
-  // Did this speech begin while the characters were still sounding? Then it starts with
-  // the speakers bleeding into the microphone, whatever else it may also contain.
-  const overlapped = began < driver.lastPlayEnd + 250
+  // Did this speech begin while the characters were still sounding? The microphone is cut
+  // for MIC_GAP_MS after the last line, so anything starting before that is theirs, not yours.
+  const overlapped = began < driver.lastPlayEnd + MIC_GAP_MS
     || (startMs ? startMs < driver.lastPlayEnd - 150 : queue.playing && !queue.paused);
 
   if (driver.phase === 'paused') {
@@ -215,7 +259,7 @@ function driverHeard(text, final, startMs) {
     // "Which do you choose? Let's go forward." Cut their words off the front and keep
     // whatever is left - throwing the whole thing away loses a real answer.
     const kept = stripEcho(text);
-    if (!isRealAnswer(kept)) {
+    if (!isRealAnswer(kept) || isEchoOfTurn(kept)) {
       micReport('dropped', `echo of the characters: "${text}"`);
       return;
     }
