@@ -6,7 +6,8 @@
   "description": "Voice-only story game that keeps drivers awake",
   "scripts": {
     "start": "node server/index.mjs",
-    "sfx": "node tools/make-sfx.mjs",
+    "play": "node tools/play.mjs",
+    "smoke": "node tools/smoke.mjs",
     "bench": "node demo/pipeline.mjs",
     "voices": "node demo/voices.mjs"
   },

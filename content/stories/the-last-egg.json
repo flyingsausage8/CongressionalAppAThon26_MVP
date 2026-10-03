@@ -1,0 +1,41 @@
+{
+  "id": "the-last-egg",
+  "title": "The Last Egg",
+  "blurb": "A dying courier hands you a dragon's egg and four days of road.",
+  "you": "You are a traveller on the north road. Ordinary, unarmed, and now holding something enormously valuable that you did not ask for.",
+  "setup": "A courier collapsed at the roadside and pressed a heavy bundle into your hands before she went quiet. Inside the cloth is a dragon's egg, still warm, heavier than it has any right to be. She said the mother is four days north, past the Thornback Pass, and that the egg must not be allowed to go cold. Two people are travelling with you: Odo, a retired courier who knew the dead woman, and Wren, who joined the road a day later and has not explained herself. The north road runs through toll villages, high country and weather, and the egg is the single most valuable object any of you has ever touched.",
+  "goal": "Get the egg north to its mother before it goes cold, and deal with everyone who wants it along the way.",
+  "opening": "Dusk on the north road. The bundle is warm against your chest, and the first village lights are showing ahead.",
+  "tone": "Warm adventure. Real stakes and real tension, but never horror and never grim. The humour comes from ordinary people handling something far above their pay grade.",
+  "softTurns": 12,
+  "maxTurns": 20,
+  "cast": {
+    "narrator": {
+      "voice": "ballad",
+      "style": "Soft, lilting, unhurried. A storyteller who loves the road and takes their time describing it.",
+      "bio": "Describes the country, the weather, the light, and the egg. Speaks to the listener as 'you'. Never decides what you do - only what the world does.",
+      "condition": "Steady."
+    },
+    "odo": {
+      "voice": "cedar",
+      "style": "Deep, dry, gravelly. Grumbles constantly. Long pauses. Secretly having the time of his life.",
+      "bio": "Thirty years a courier, retired two years and bored out of his mind. Knew the dead woman. Knows every road north and every person worth avoiding. Will not admit that his knee is finished, or that he is frightened.",
+      "condition": "Road-worn, knee aching, pretending otherwise."
+    },
+    "wren": {
+      "voice": "nova",
+      "style": "Quick, bright, young, a little too casual. Talks fast when she is lying.",
+      "bio": "Joined the road a day out and has been useful ever since - too useful. She can get into anywhere, and she knows exactly what the egg is worth to the wrong people. Whether she came to steal it is a question she has not settled with herself yet.",
+      "condition": "Alert, travelling light, keeping her distance from Odo."
+    }
+  },
+  "extras": [
+    { "id": "voice_a", "voice": "onyx", "style": "Very deep, slow, heavy. Fills a room." },
+    { "id": "voice_b", "voice": "coral", "style": "Bright, high, warm and quick." },
+    { "id": "voice_c", "voice": "ash", "style": "Fast, theatrical, pleased with itself." },
+    { "id": "voice_d", "voice": "sage", "style": "Calm, level, measured and thoughtful." }
+  ],
+  "props": {
+    "the egg": "Warm. Heavier than it looks. Wrapped in a courier's cloak."
+  }
+}

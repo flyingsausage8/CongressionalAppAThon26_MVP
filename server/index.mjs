@@ -4,7 +4,8 @@ import path from 'node:path';
 import { WebSocketServer } from 'ws';
 import { loadEnv } from './env.mjs';
 import { speechToken } from './ai.mjs';
-import { Session, castInfo, storyInfo } from './game.mjs';
+import { Session } from './game.mjs';
+import { storyMenu, getStory, defaultStoryId } from './stories.mjs';
 
 loadEnv();
 
@@ -38,8 +39,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (url.pathname === '/api/cast') {
-    json(res, 200, { cast: castInfo, story: { title: storyInfo.title, premise: storyInfo.premise } });
+  if (url.pathname === '/api/stories') {
+    json(res, 200, { stories: storyMenu(), default: defaultStoryId });
     return;
   }
 
@@ -57,7 +58,7 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws) => {
-  const session = new Session();
+  let session = null;
   let busy = false;
 
   const emit = (msg) => {
@@ -65,7 +66,7 @@ wss.on('connection', (ws) => {
   };
 
   const run = async (opts) => {
-    if (busy) return;
+    if (busy || !session) return;
     busy = true;
     emit({ t: 'thinking' });
     try {
@@ -77,7 +78,7 @@ wss.on('connection', (ws) => {
     }
   };
 
-  emit({ t: 'ready', title: storyInfo.title });
+  emit({ t: 'ready', stories: storyMenu(), default: defaultStoryId });
 
   ws.on('message', (data) => {
     let msg;
@@ -86,12 +87,21 @@ wss.on('connection', (ws) => {
     } catch {
       return;
     }
-    if (msg.t === 'start') run({ said: null });
-    else if (msg.t === 'say' && msg.text?.trim()) run({ said: msg.text.trim() });
-    else if (msg.t === 'idle') run({ nudge: true });
+    if (msg.t === 'start') {
+      if (busy) return;
+      const story = getStory(msg.storyId);
+      session = new Session(story.id);
+      emit({ t: 'storyStarted', id: story.id, title: story.title, you: story.you, goal: story.goal });
+      run({ said: null });
+    } else if (msg.t === 'say' && msg.text?.trim()) {
+      run({ said: msg.text.trim() });
+    } else if (msg.t === 'idle') {
+      run({ nudge: true });
+    }
   });
 });
 
 server.listen(PORT, () => {
-  console.log(`\n  ${storyInfo.title} running at  http://localhost:${PORT}\n`);
+  console.log(`\n  Story engine running at  http://localhost:${PORT}`);
+  console.log(`  Starting points: ${storyMenu().map((s) => s.id).join(', ')}\n`);
 });

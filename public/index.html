@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Red and the Long Way Through the Wood</title>
+<title>Stay Awake — a story that talks back</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
 </head>
@@ -12,14 +12,16 @@
 
 <main>
   <header>
-    <h1>The Long Way Through the Wood</h1>
-    <p class="sub">A story that talks back, so you stay awake. Eyes on the road &mdash; just listen and answer.</p>
+    <h1>Stay Awake</h1>
+    <p class="sub">A story that talks back. Eyes on the road &mdash; just listen and answer out loud.</p>
   </header>
 
   <section id="startCard" class="card">
+    <p class="pickLabel">Choose a starting point</p>
+    <div id="storyList" class="storyList"></div>
     <p class="premise" id="premise"></p>
-    <button id="startBtn" class="big">Begin the story</button>
-    <p class="hint">Needs microphone access. Just talk &mdash; you are Red, and the story follows what you say.</p>
+    <button id="startBtn" class="big" disabled>Begin</button>
+    <p class="hint">Needs microphone access. Nothing is scripted &mdash; the story goes where you take it.</p>
   </section>
 
   <section id="game" hidden>
@@ -31,12 +33,20 @@
       <span id="latency"></span>
     </div>
 
-    <div id="script" class="script"></div>
+    <div class="stage">
+      <div id="script" class="script"></div>
+      <aside id="statePanel" class="statePanel">
+        <h2>Where things stand</h2>
+        <div id="sceneNow" class="sceneNow"></div>
+        <div id="conditions" class="conditions"></div>
+        <div id="facts" class="facts"></div>
+      </aside>
+    </div>
 
     <div id="heard" class="heard"><span id="heardText"></span></div>
 
     <div class="controls">
-      <button id="restartBtn" class="big" hidden>Tell it again</button>
+      <button id="restartBtn" class="big" hidden>Tell another one</button>
       <button id="micBtn" class="mic">Hold to talk</button>
       <form id="typeForm" class="typeForm">
         <input id="typeInput" placeholder="…or type what you say" autocomplete="off">

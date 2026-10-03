@@ -1,0 +1,47 @@
+{
+  "id": "the-quiet-door",
+  "title": "The Quiet Door",
+  "blurb": "A tinker, a company of exiles, and a mountain hall nobody has opened in eighty years.",
+  "you": "You are Pim Thistledown of Nettle Hollow - a burrow-dweller, a gardener, a person of regular meals and no ambitions whatsoever. You have never been further than the market road, and you would like to keep it that way.",
+  "setup": "Last night a wandering tinker called Alvard Mund scratched a mark on your round front door, and this morning a company of exiled mountain folk arrived expecting breakfast. They are going home - to a hall under a mountain their grandparents fled in a single night, eighty years ago. They need someone small, quiet and quick-fingered, and Alvard has told them that is you. Nobody has set foot in that hall since. Nobody who left will say what they were running from; they only call it the Tenant. The strangest part, and the part the company does not like discussed: the great doors were locked from the inside.",
+  "goal": "Get to the mountain hall with the company, get through the quiet door, and find out what is actually in there - and whether going home is still possible.",
+  "opening": "Your kitchen, far too full of strangers, and a contract on the table that you have not signed yet.",
+  "tone": "Cosy adventure that grows larger than expected. Fond humour about food, comfort and reluctance. Wonder rather than horror - whatever is under the mountain, the story stays warm.",
+  "softTurns": 14,
+  "maxTurns": 22,
+  "cast": {
+    "narrator": {
+      "voice": "fable",
+      "style": "Storybook warmth. Expressive, well-paced, fond of the small details - kettles, boots, weather, hills.",
+      "bio": "Tells the tale of the road and the country it crosses. Speaks to the listener as 'you'. Describes the world and what happens in it, never what you decide.",
+      "condition": "Steady."
+    },
+    "alvard": {
+      "voice": "onyx",
+      "style": "Very deep, very slow, dry as old paper. Long pauses. Amused by almost everything.",
+      "bio": "A wandering tinker who mends pots, knows far too much, and answers questions with other questions. He chose you and has not explained why. Old enough that 'eighty years ago' sounds recent to him.",
+      "condition": "Unhurried. Entirely at ease, which is somehow not reassuring."
+    },
+    "hesta": {
+      "voice": "coral",
+      "style": "Bright, high, clipped and fast. Proud. No patience for dithering.",
+      "bio": "Captain of the company and heir to the lost hall, born in exile and raised on the story of it. Competent, impatient, and privately terrified that the home she has been promised her whole life will turn out to be nothing much.",
+      "condition": "Impatient to be moving. Boots already on."
+    },
+    "yarrow": {
+      "voice": "ash",
+      "style": "Quick, theatrical, cheerful, never stops talking. Delighted by everything.",
+      "bio": "The company's scout and worst-kept secret. Friendly to a fault, hopeless at keeping a confidence, and the only one willing to say out loud what everyone else is thinking. Genuinely good on a cliff.",
+      "condition": "Bright-eyed and already eating something."
+    }
+  },
+  "extras": [
+    { "id": "voice_a", "voice": "cedar", "style": "Deep, weathered, slow and kind." },
+    { "id": "voice_b", "voice": "nova", "style": "Quick, bright, young and sharp." },
+    { "id": "voice_c", "voice": "sage", "style": "Calm, level, measured and thoughtful." },
+    { "id": "voice_d", "voice": "verse", "style": "Light, lyrical, a touch odd." }
+  ],
+  "props": {
+    "the contract": "Unsigned, on your kitchen table, in very small writing."
+  }
+}

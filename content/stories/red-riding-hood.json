@@ -1,0 +1,47 @@
+{
+  "id": "red-riding-hood",
+  "title": "The Long Way Through the Wood",
+  "blurb": "A basket, a forest path, and a wolf who would very much like a word.",
+  "you": "You are Red, carrying a basket to your grandmother on the far side of the forest. Clever, cheerful, and not nearly as easy to fool as the wolf is hoping.",
+  "setup": "It is a bright cool morning and you are crossing the forest with a basket of bread, honey and medicine for your grandmother, who lives on the far side of the wood. There is a path. There is also a wolf - vain, talkative, enormously pleased with himself - who has fallen into step beside you and would like to chat. Your grandmother is expecting you. She is also considerably less frail than the wolf has been led to believe, and the woodcutter works the stream nearby.",
+  "goal": "Get to your grandmother's cottage, and work out what the wolf is actually up to before he manages it.",
+  "opening": "Morning sun through the leaves, a basket heavier than it looks, and the first fork in the path already in sight.",
+  "tone": "A warm fairy tale told aloud. Mischief and adventure, never horror. The wolf is a comic trickster, nobody is eaten, and nobody is hurt.",
+  "softTurns": 8,
+  "maxTurns": 14,
+  "cast": {
+    "narrator": {
+      "voice": "ballad",
+      "style": "Soft, lilting storyteller. Unhurried, fond of the tale. Like someone reading a picture book aloud.",
+      "bio": "Tells the story of the forest, the path, and the light through the leaves. Speaks to the listener as 'you'. Describes the world, never your choices.",
+      "condition": "Steady."
+    },
+    "wolf": {
+      "voice": "ash",
+      "style": "Quick, bright, theatrical. Delighted with his own cleverness. Fast and bouncy where the narrator is slow and soft.",
+      "bio": "A clever wolf who talks his way through the world rather than fighting it. Vain, funny, and a terrible liar who believes he is a wonderful one. More trickster than monster, and genuinely delighted to meet someone worth talking to.",
+      "condition": "Trotting alongside you, pleased with himself."
+    },
+    "grandma": {
+      "voice": "coral",
+      "style": "Bright, warm, quick. Teasing in a loving way. Sharper and higher than anyone expects.",
+      "bio": "Lives at the far side of the wood. Not frail in the least - she gardens, she argues with the woodcutter, and she keeps a stick by the door. She is pleased you came, and will absolutely comment on how long it took you.",
+      "condition": "At home, busy, expecting you."
+    },
+    "woodcutter": {
+      "voice": "onyx",
+      "style": "Very deep, slow, dry humour. Long pauses. Says little and means all of it.",
+      "bio": "Works the woods near the stream. Knows every path and which ones flood. Friendly in a plain way. Has met the wolf before and was not especially impressed.",
+      "condition": "Working near the stream."
+    }
+  },
+  "extras": [
+    { "id": "voice_a", "voice": "sage", "style": "Calm, level, measured." },
+    { "id": "voice_b", "voice": "nova", "style": "Quick, bright, young." },
+    { "id": "voice_c", "voice": "cedar", "style": "Deep, weathered, kind." },
+    { "id": "voice_d", "voice": "verse", "style": "Light, lyrical, a touch odd." }
+  ],
+  "props": {
+    "the basket": "Bread, a jar of honey, and medicine. Heavier than it looks."
+  }
+}

@@ -1,19 +1,19 @@
 const $ = (id) => document.getElementById(id);
 
 const ui = {
-  startCard: $('startCard'), startBtn: $('startBtn'), premise: $('premise'),
+  startCard: $('startCard'), startBtn: $('startBtn'), premise: $('premise'), storyList: $('storyList'),
   game: $('game'), script: $('script'), status: $('status'), dot: $('dot'),
   latency: $('latency'), heard: $('heardText'), micBtn: $('micBtn'),
   form: $('typeForm'), input: $('typeInput'), nudge: $('nudge'),
   progress: $('progress'), restart: $('restartBtn'),
+  sceneNow: $('sceneNow'), conditions: $('conditions'), facts: $('facts'),
 };
 
-const SFX_NAMES = [];
 const IDLE_MS = 25000;
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
 let storyOver = false;
-const sfxCache = new Map();
+let chosenStory = null;
 
 function setStatus(text, cls = '') {
   ui.status.textContent = text;
@@ -136,8 +136,9 @@ function addLine(epoch, idx, line) {
   const el = document.createElement('div');
   el.className = 'ln';
   el.dataset.key = `${epoch}:${idx}`;
+  const name = line.as || line.voice;
   const tone = line.tone ? ` <span class="tone">(${esc(line.tone)})</span>` : '';
-  el.innerHTML = `<span class="who v-${esc(line.voice)}">${esc(line.voice)}</span>${esc(line.text)}${tone}`;
+  el.innerHTML = `<span class="who v-${esc(line.voice)}">${esc(name)}</span>${esc(line.text)}${tone}`;
   ui.script.appendChild(el);
   el.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
@@ -166,6 +167,27 @@ function markLine(epoch, idx, cls) {
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+/* ---------------- live state: conditions, scene, what we know ---------------- */
+
+function renderState(state) {
+  if (!state) return;
+  ui.sceneNow.textContent = state.scene || '';
+
+  const rows = Object.entries(state.cast || {})
+    .filter(([id, c]) => c.condition && (state.seen || []).includes(id))
+    .map(([id, c]) => `<div class="cond"><span class="who v-${esc(id)}">${esc(c.name || id)}</span>${esc(c.condition)}</div>`);
+
+  const props = Object.entries(state.props || {})
+    .map(([k, v]) => `<div class="cond"><span class="who prop">${esc(k)}</span>${esc(v)}</div>`);
+
+  const you = state.you ? `<div class="cond"><span class="who mine">you</span>${esc(state.you)}</div>` : '';
+
+  ui.conditions.innerHTML = you + rows.join('') + props.join('');
+  ui.facts.innerHTML = (state.learned || []).length
+    ? `<h3>What we know</h3><ul>${state.learned.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>`
+    : '';
+}
+
 /* ---------------- idle nudge: the whole point of the game ---------------- */
 
 function armIdle() {
@@ -191,7 +213,7 @@ function connect() {
 
   ws.onopen = () => {
     setStatus('connected', 'live');
-    ws.send(JSON.stringify({ t: 'start' }));
+    ws.send(JSON.stringify({ t: 'start', storyId: chosenStory }));
   };
 
   ws.onclose = () => setStatus('disconnected', 'err');
@@ -200,7 +222,10 @@ function connect() {
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
 
-    if (m.t === 'thinking') {
+    if (m.t === 'storyStarted') {
+      document.title = `${m.title} — Stay Awake`;
+      document.querySelector('h1').textContent = m.title;
+    } else if (m.t === 'thinking') {
       cancelIdle();
       queue.reset();
       setStatus('writing…', 'think');
@@ -213,13 +238,12 @@ function connect() {
         src: URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' })),
       });
       setStatus('playing', 'live');
-    } else if (m.t === 'sfx') {
-      queue.add(queue.epoch, m.idx, { kind: 'skip' });
     } else if (m.t === 'audioError') {
       queue.add(queue.epoch, m.idx, { kind: 'skip' });
     } else if (m.t === 'turnEnd') {
       ui.latency.textContent = m.firstAudioMs ? `${m.firstAudioMs}ms` : '';
-      if (m.act) ui.progress.textContent = `${m.act} · ${m.turn}/${m.total}`;
+      ui.progress.textContent = `exchange ${m.turn}`;
+      renderState(m.state);
       storyOver = !!m.done;
       queue.endTurn(queue.epoch, m.idx);
     } else if (m.t === 'error') {
@@ -297,16 +321,34 @@ function stopListening() {
 
 /* ---------------- wiring ---------------- */
 
-fetch('/api/cast')
+fetch('/api/stories')
   .then((r) => r.json())
-  .then((d) => { ui.premise.textContent = d.story.premise; })
-  .catch(() => { ui.premise.textContent = 'A basket, a forest path, and a wolf who would like a word.'; });
+  .then(({ stories, default: def }) => {
+    for (const s of stories) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'storyPick';
+      b.dataset.id = s.id;
+      b.innerHTML = `<strong>${esc(s.title)}</strong><span>${esc(s.blurb)}</span>`;
+      b.onclick = () => pick(s);
+      ui.storyList.appendChild(b);
+    }
+    const first = stories.find((s) => s.id === def) || stories[0];
+    if (first) pick(first);
+  })
+  .catch(() => { ui.premise.textContent = 'Could not load the stories.'; });
 
-// preload nothing - the story has no sound effects
+function pick(s) {
+  chosenStory = s.id;
+  ui.premise.innerHTML = `<em>${esc(s.you)}</em><br><br>${esc(s.goal)}`;
+  ui.startBtn.disabled = false;
+  for (const b of ui.storyList.children) b.classList.toggle('on', b.dataset.id === s.id);
+}
 
 ui.restart.onclick = () => location.reload();
 
 ui.startBtn.onclick = async () => {
+  if (!chosenStory) return;
   ui.startBtn.disabled = true;
   ui.startBtn.textContent = 'Starting…';
   try {

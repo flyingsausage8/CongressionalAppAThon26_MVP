@@ -7,12 +7,19 @@ const api = () => ({
 });
 
 /** Streams assistant text token by token. */
-export async function* streamChat(messages, { maxTokens = 1200 } = {}) {
+export async function* streamChat(messages, { maxTokens = 1600 } = {}) {
   const { ep, key, dep, ver } = api();
+  const effort = process.env.AZURE_OPENAI_REASONING_EFFORT || 'none';
   const res = await fetch(`${ep}/openai/deployments/${dep}/chat/completions?api-version=${ver}`, {
     method: 'POST',
     headers: { 'api-key': key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, max_completion_tokens: maxTokens, stream: true }),
+    body: JSON.stringify({
+      messages,
+      max_completion_tokens: maxTokens,
+      stream: true,
+      // reasoning models stall before the first token; the story needs words fast
+      ...(effort === 'off' ? {} : { reasoning_effort: effort }),
+    }),
   });
   if (!res.ok) throw new Error(`chat ${res.status}: ${await res.text()}`);
 
