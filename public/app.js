@@ -14,11 +14,15 @@ const ui = {
 const IDLE_MS = 25000;       // hands-on mode: how long before we prod you
 const ANSWER_MS = 5000;      // driver mode: how long a question waits before we ask again
 const SETTLE_MS = 1300;      // driver mode: silence that means "they have finished talking"
+const MIC_DEAD_MS = 25000;   // driver mode: no microphone events at all means it has died
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
 let storyOver = false;
 let chosenStory = null;
 let resumeId = null;
+let currentSaveId = null;    // what to resume from if the connection drops
+let reconnects = 0;
+let silentRecap = false;     // a reconnect should not reprint what is already on screen
 
 /* ---------------- driver mode: hands free, mic always open ---------------- */
 
@@ -30,6 +34,7 @@ const driver = {
   quietSince: 0,    // when the speakers actually went silent
   lastPlayEnd: 0,   // wall clock of the last audio frame we played
   micT0: 0,         // wall clock of when the recogniser session started
+  lastEventAt: 0,   // last sign of life from the microphone
   settle: null,
   wait: null,
   urges: 0,
@@ -123,7 +128,8 @@ function driverAwaitAnswer() {
   }
 
   driverHint('Your turn \u2014 just say it', 'live');
-  driver.wait = setTimeout(urgeAgain, ANSWER_MS);
+  // Ask again, but ease off a little each time rather than nagging on a fixed beat.
+  driver.wait = setTimeout(urgeAgain, ANSWER_MS + Math.min(driver.urges, 4) * 2500);
 }
 
 function urgeAgain() {
@@ -132,6 +138,13 @@ function urgeAgain() {
   driver.urges++;
   driverHint('Still with us?', 'think');
   ws.send(JSON.stringify({ t: 'idle', level: driver.urges }));
+
+  // If the microphone has shown no sign of life across several asks, it is not that they
+  // are quiet - it has stopped working. Say so, and bring it back.
+  if (driver.urges >= 2 && Date.now() - driver.lastEventAt > ANSWER_MS * 2) {
+    micReport('unresponsive', `${driver.urges} asks with no microphone activity`);
+    relisten();
+  }
 }
 
 /** Everything the mic hears while driver mode is on comes through here. */
@@ -450,11 +463,27 @@ function connect() {
   ws = new WebSocket(`${proto}://${location.host}/ws`);
 
   ws.onopen = () => {
-    setStatus('connected', 'live');
+    setStatus(reconnects ? 'back' : 'connected', 'live');
+    reconnects = 0;
     ws.send(JSON.stringify({ t: 'start', storyId: chosenStory, resumeId }));
   };
 
-  ws.onclose = () => setStatus('disconnected', 'err');
+  // A driver cannot look at the screen, so a dropped connection must heal itself.
+  ws.onclose = () => {
+    if (storyOver) return;
+    if (!currentSaveId || reconnects >= 6) {
+      setStatus('disconnected', 'err');
+      if (driver.on) driverHint('Lost the connection', 'err');
+      return;
+    }
+    reconnects++;
+    resumeId = currentSaveId;
+    silentRecap = true;
+    setStatus(`reconnecting (${reconnects})…`, 'think');
+    if (driver.on) driverHint('Lost you for a second\u2026', 'think');
+    setTimeout(connect, Math.min(1000 * reconnects, 5000));
+  };
+
   ws.onerror = () => setStatus('connection error', 'err');
 
   ws.onmessage = (ev) => {
@@ -463,7 +492,9 @@ function connect() {
     if (m.t === 'storyStarted') {
       document.title = `${m.title} — Stay Awake`;
       document.querySelector('h1').textContent = m.title;
-      if (m.resumed && m.recap?.length) addRecap(m.recap);
+      if (m.saveId) currentSaveId = m.saveId;
+      if (m.resumed && m.recap?.length && !silentRecap) addRecap(m.recap);
+      silentRecap = false;
     } else if (m.t === 'thinking') {
       cancelIdle();
       queue.reset();
@@ -515,7 +546,10 @@ async function initSpeech() {
   setInterval(async () => {
     try {
       const r = await fetch('/api/speech-token');
-      if (r.ok) speechCfg.authorizationToken = (await r.json()).token;
+      if (!r.ok) return;
+      const { token } = await r.json();
+      speechCfg.authorizationToken = token;
+      if (recognizer) recognizer.authorizationToken = token;   // a live recogniser needs it too
     } catch { /* keep the old token and hope */ }
   }, 8 * 60 * 1000);
 }
@@ -534,30 +568,52 @@ async function startAlwaysListening() {
     });
     audioCfg = SDK.AudioConfig.fromStreamInput(stream);
   } catch (err) {
-    console.warn('no echo-cancelled stream, falling back', err);
+    micReport('no-echo-cancel', String(err?.message || err));
     audioCfg = SDK.AudioConfig.fromDefaultMicrophoneInput();
   }
 
   recognizer = new SDK.SpeechRecognizer(speechCfg, audioCfg);
   driver.micT0 = Date.now();
+  driver.lastEventAt = Date.now();
 
-  recognizer.recognizing = (_s, e) => driverHeard(e.result.text || '', false, startOf(e));
+  recognizer.recognizing = (_s, e) => {
+    driver.lastEventAt = Date.now();
+    driverHeard(e.result.text || '', false, startOf(e));
+  };
   recognizer.recognized = (_s, e) => {
+    driver.lastEventAt = Date.now();
     if (e.result.reason === SDK.ResultReason.RecognizedSpeech && e.result.text) {
       driverHeard(e.result.text, true, startOf(e));
     }
   };
-  recognizer.sessionStarted = () => { driver.micT0 = Date.now(); };
+  recognizer.speechStartDetected = () => { driver.lastEventAt = Date.now(); };
+  recognizer.sessionStarted = () => {
+    driver.micT0 = Date.now();
+    driver.lastEventAt = Date.now();
+    micReport('started');
+  };
   recognizer.canceled = (_s, e) => {
-    console.warn('recognition canceled', e.errorDetails || e.reason);
+    micReport('canceled', e?.errorDetails || `reason ${e?.reason}`);
     relisten();
   };
-  recognizer.sessionStopped = () => relisten();
+  recognizer.sessionStopped = () => {
+    micReport('stopped');
+    relisten();
+  };
 
-  recognizer.startContinuousRecognitionAsync();
+  recognizer.startContinuousRecognitionAsync(
+    () => { listening = true; },
+    (err) => { micReport('start-failed', String(err)); relisten(); },
+  );
   listening = true;
   ui.driverBar.hidden = false;
   driverHint('Listening');
+}
+
+/** Tell the server, so microphone trouble shows up in the transcript. */
+function micReport(event, detail = '') {
+  console.warn('[mic]', event, detail);
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'mic', event, detail }));
 }
 
 /** Wall-clock time the speech in this result began. */
@@ -568,13 +624,23 @@ function startOf(e) {
 
 /** The mic must never quietly die on a driver. */
 function relisten() {
-  if (!driver.on || storyOver || !listening) return;
+  if (!driver.on || storyOver) return;
   listening = false;
   const old = recognizer;
   recognizer = null;
   try { old?.close(); } catch { /* already gone */ }
-  setTimeout(() => { if (driver.on && !storyOver) startAlwaysListening(); }, 600);
+  setTimeout(() => { if (driver.on && !storyOver && !listening) startAlwaysListening(); }, 600);
 }
+
+/** Nothing from the microphone for a long time means it died, not that you went quiet. */
+setInterval(() => {
+  if (!driver.on || storyOver) return;
+  if (!listening) { startAlwaysListening(); return; }
+  if (Date.now() - driver.lastEventAt > MIC_DEAD_MS) {
+    micReport('no-events', `${Math.round((Date.now() - driver.lastEventAt) / 1000)}s silent, restarting`);
+    relisten();
+  }
+}, 5000);
 
 function stopAlwaysListening() {
   if (!driver.on || !recognizer) return;

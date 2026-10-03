@@ -36,6 +36,11 @@ export class Transcript {
     this.write('\n_(you went quiet)_\n');
   }
 
+  /** Microphone health, so a dead mic is visible in the log instead of looking like silence. */
+  note(text) {
+    this.write(`\n_[mic] ${new Date().toISOString().slice(11, 19)} ${text}_\n`);
+  }
+
   line({ voice, as, text, tone }) {
     this.write(`\n- **${as || voice}**${tone ? ` _(${tone})_` : ''}: ${text}\n`);
   }

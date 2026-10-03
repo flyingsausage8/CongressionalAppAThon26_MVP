@@ -113,6 +113,7 @@ wss.on('connection', (ws) => {
           title: session.story.title,
           you: session.story.you,
           goal: session.story.goal,
+          saveId: log.id,
           resumed: true,
           turn: session.turn,
           recap: recapOf(snap),
@@ -125,12 +126,16 @@ wss.on('connection', (ws) => {
       session = new Session(story.id);
       log = new Transcript(story);
       console.log(`  -> ${story.title}  (transcript: ${path.relative(process.cwd(), log.md)})`);
-      emit({ t: 'storyStarted', id: story.id, title: story.title, you: story.you, goal: story.goal });
+      emit({ t: 'storyStarted', id: story.id, title: story.title, you: story.you, goal: story.goal, saveId: log.id });
       run({ said: null });
     } else if (msg.t === 'say' && msg.text?.trim()) {
       run({ said: msg.text.trim() });
     } else if (msg.t === 'idle') {
       run({ nudge: Number(msg.level) || 1 });
+    } else if (msg.t === 'mic') {
+      const detail = String(msg.detail || '').slice(0, 300);
+      console.log(`  [mic] ${msg.event}${detail ? ' - ' + detail : ''}`);
+      log?.note(`${msg.event}${detail ? ' - ' + detail : ''}`);
     }
   });
 });
