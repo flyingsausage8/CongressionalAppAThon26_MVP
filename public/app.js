@@ -364,6 +364,36 @@ function finishStory() {
    Every turn gets an epoch. Anything belonging to an older epoch is ignored, so a turn that
    is still playing when the next one starts cannot corrupt the new turn's position.        */
 
+/* ---------------- playback volume ----------------
+   The narrator reads in a level, unexcited voice, which comes back noticeably quieter than
+   the characters - and in a moving car, quieter means unintelligible. An audio element
+   cannot go above its own full volume, so the narrator is routed through a gain stage that
+   can. If the audio engine is not awake yet we simply skip the boost: a slightly quiet
+   narrator is survivable, a silent one is not.                                           */
+const LOUDER = { narrator: 2.6 };
+let playCtx = null;
+
+/** Browsers only let sound start from a click, so open the audio engine on one. */
+function wakeAudio() {
+  try {
+    playCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (playCtx.state === 'suspended') playCtx.resume().catch(() => {});
+  } catch { /* no boost on this browser */ }
+}
+
+function boost(el, voice) {
+  const gain = LOUDER[voice];
+  if (!gain) return;
+  try {
+    playCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (playCtx.state === 'suspended') playCtx.resume().catch(() => {});
+    if (playCtx.state !== 'running') return;          // would route the sound into nothing
+    const node = playCtx.createGain();
+    node.gain.value = gain;
+    playCtx.createMediaElementSource(el).connect(node).connect(playCtx.destination);
+  } catch { /* leave the element on its own output */ }
+}
+
 const queue = {
   epoch: 0,
   items: new Map(),   // idx -> { kind, src }
@@ -394,7 +424,7 @@ const queue = {
     markLine(epoch, idx, 'playing');
     if (item.kind !== 'skip') {
       try {
-        await this.sound(item.src);
+        await this.sound(item.src, item.voice);
       } catch (err) {
         console.warn('playback failed', err);
       }
@@ -410,9 +440,10 @@ const queue = {
     this.checkDone();
   },
 
-  sound(src) {
+  sound(src, voice) {
     return new Promise((resolve) => {
       const a = new Audio(src);
+      boost(a, voice);
       this.current = a;
       // Keep a running mark of "the speakers were live until now", so we can throw away
       // anything the microphone picked up while they were talking.
@@ -640,6 +671,7 @@ function connect() {
       const bytes = Uint8Array.from(atob(m.mp3), (c) => c.charCodeAt(0));
       queue.add(queue.epoch, m.idx, {
         kind: 'audio',
+        voice: m.voice,
         src: URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' })),
       });
       setStatus('playing', 'live');
@@ -997,6 +1029,7 @@ ui.restart.onclick = () => location.reload();
 
 ui.startBtn.onclick = async () => {
   if (!chosenStory) return;
+  wakeAudio();                 // a click is the browser's cue to allow sound; use it
   driver.on = !!ui.driverToggle?.checked;
   ui.startBtn.disabled = true;
   ui.startBtn.textContent = 'Starting…';
