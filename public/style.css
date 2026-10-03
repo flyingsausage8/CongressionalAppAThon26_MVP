@@ -290,3 +290,20 @@ button:disabled { opacity: 0.4; cursor: default; }
 .who.v-odo, .who.v-alvard   { color: #a89a7e !important; }
 .who.v-wren, .who.v-yarrow  { color: #7fc2b0 !important; }
 .who.v-hesta                { color: #d98ca8 !important; }
+
+/* ---------- saved sessions + recap ---------- */
+.storyPick.save strong em { font-style: normal; color: var(--dim); font-weight: 400; font-size: 12px; }
+.recap {
+  opacity: .5;
+  border-left: 2px solid var(--line);
+  padding-left: 16px;
+  margin-bottom: 26px;
+}
+.recapHead {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 10px;
+}
+.recap .ln { margin-bottom: 8px; font-size: 14px; }

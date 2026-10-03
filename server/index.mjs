@@ -6,6 +6,7 @@ import { loadEnv } from './env.mjs';
 import { speechToken } from './ai.mjs';
 import { Session } from './game.mjs';
 import { storyMenu, getStory, defaultStoryId } from './stories.mjs';
+import { Transcript, listSaves, loadSave } from './transcript.mjs';
 
 loadEnv();
 
@@ -40,7 +41,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === '/api/stories') {
-    json(res, 200, { stories: storyMenu(), default: defaultStoryId });
+    json(res, 200, { stories: storyMenu(), saves: listSaves(), default: defaultStoryId });
     return;
   }
 
@@ -59,18 +60,28 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws) => {
   let session = null;
+  let log = null;
   let busy = false;
 
   const emit = (msg) => {
+    if (log) {
+      if (msg.t === 'line') log.line(msg);
+      else if (msg.t === 'turnEnd') log.endTurn(msg);
+    }
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
   };
 
   const run = async (opts) => {
     if (busy || !session) return;
     busy = true;
+    if (log) {
+      if (opts.said) log.said(opts.said);
+      else if (opts.nudge) log.nudged();
+    }
     emit({ t: 'thinking' });
     try {
       await session.takeTurn({ ...opts, emit });
+      log?.save(session);
     } catch (err) {
       emit({ t: 'error', message: String(err.message || err) });
     } finally {
@@ -78,7 +89,7 @@ wss.on('connection', (ws) => {
     }
   };
 
-  emit({ t: 'ready', stories: storyMenu(), default: defaultStoryId });
+  emit({ t: 'ready', stories: storyMenu(), saves: listSaves(), default: defaultStoryId });
 
   ws.on('message', (data) => {
     let msg;
@@ -87,10 +98,33 @@ wss.on('connection', (ws) => {
     } catch {
       return;
     }
+
     if (msg.t === 'start') {
       if (busy) return;
+
+      const snap = msg.resumeId ? loadSave(msg.resumeId) : null;
+      if (snap) {
+        session = Session.restore(snap);
+        log = new Transcript(session.story, snap.id);
+        console.log(`  -> continuing "${session.story.title}" from exchange ${session.turn}`);
+        emit({
+          t: 'storyStarted',
+          id: session.story.id,
+          title: session.story.title,
+          you: session.story.you,
+          goal: session.story.goal,
+          resumed: true,
+          turn: session.turn,
+          recap: recapOf(snap),
+        });
+        run({ said: null, resumed: true });
+        return;
+      }
+
       const story = getStory(msg.storyId);
       session = new Session(story.id);
+      log = new Transcript(story);
+      console.log(`  -> ${story.title}  (transcript: ${path.relative(process.cwd(), log.md)})`);
       emit({ t: 'storyStarted', id: story.id, title: story.title, you: story.you, goal: story.goal });
       run({ said: null });
     } else if (msg.t === 'say' && msg.text?.trim()) {
@@ -100,6 +134,24 @@ wss.on('connection', (ws) => {
     }
   });
 });
+
+/** Lines of the saved story, so a resumed session can show what came before. */
+function recapOf(snap) {
+  const out = [];
+  for (const h of (snap.history || []).slice(-8)) {
+    if (h.role === 'user') {
+      out.push({ you: true, text: String(h.content).replace(/^You say: "?|"$/g, '') });
+    } else {
+      for (const raw of String(h.content).split('\n')) {
+        try {
+          const o = JSON.parse(raw);
+          if (o.text) out.push({ voice: o.voice, as: o.as || null, text: o.text });
+        } catch { /* skip */ }
+      }
+    }
+  }
+  return out;
+}
 
 server.listen(PORT, () => {
   console.log(`\n  Story engine running at  http://localhost:${PORT}`);

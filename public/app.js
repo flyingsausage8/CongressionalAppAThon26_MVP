@@ -7,6 +7,7 @@ const ui = {
   form: $('typeForm'), input: $('typeInput'), nudge: $('nudge'),
   progress: $('progress'), restart: $('restartBtn'),
   sceneNow: $('sceneNow'), conditions: $('conditions'), facts: $('facts'),
+  savesWrap: $('savesWrap'), saveList: $('saveList'),
 };
 
 const IDLE_MS = 25000;
@@ -14,6 +15,7 @@ const IDLE_MS = 25000;
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
 let storyOver = false;
 let chosenStory = null;
+let resumeId = null;
 
 function setStatus(text, cls = '') {
   ui.status.textContent = text;
@@ -160,6 +162,22 @@ function addEnding() {
   el.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
+/** Silent replay of the last few lines when a saved story is picked up again. */
+function addRecap(lines) {
+  const wrap = document.createElement('div');
+  wrap.className = 'recap';
+  wrap.innerHTML =
+    '<div class="recapHead">Previously</div>' +
+    lines
+      .map((l) =>
+        l.you
+          ? `<div class="ln you-line done"><span class="who">you</span>${esc(l.text)}</div>`
+          : `<div class="ln done"><span class="who v-${esc(l.voice)}">${esc(l.as || l.voice)}</span>${esc(l.text)}</div>`,
+      )
+      .join('');
+  ui.script.appendChild(wrap);
+}
+
 function markLine(epoch, idx, cls) {
   const el = ui.script.querySelector(`.ln[data-key="${epoch}:${idx}"]`);
   if (el) el.classList.add(cls);
@@ -213,7 +231,7 @@ function connect() {
 
   ws.onopen = () => {
     setStatus('connected', 'live');
-    ws.send(JSON.stringify({ t: 'start', storyId: chosenStory }));
+    ws.send(JSON.stringify({ t: 'start', storyId: chosenStory, resumeId }));
   };
 
   ws.onclose = () => setStatus('disconnected', 'err');
@@ -225,6 +243,7 @@ function connect() {
     if (m.t === 'storyStarted') {
       document.title = `${m.title} — Stay Awake`;
       document.querySelector('h1').textContent = m.title;
+      if (m.resumed && m.recap?.length) addRecap(m.recap);
     } else if (m.t === 'thinking') {
       cancelIdle();
       queue.reset();
@@ -323,7 +342,7 @@ function stopListening() {
 
 fetch('/api/stories')
   .then((r) => r.json())
-  .then(({ stories, default: def }) => {
+  .then(({ stories, saves, default: def }) => {
     for (const s of stories) {
       const b = document.createElement('button');
       b.type = 'button';
@@ -333,16 +352,51 @@ fetch('/api/stories')
       b.onclick = () => pick(s);
       ui.storyList.appendChild(b);
     }
+
+    if (saves?.length) {
+      ui.savesWrap.hidden = false;
+      for (const s of saves) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'storyPick save';
+        b.dataset.save = s.id;
+        const when = new Date(s.savedAt).toLocaleString();
+        b.innerHTML =
+          `<strong>${esc(s.title)} <em>&middot; exchange ${s.turn}${s.done ? ', ended' : ''}</em></strong>` +
+          `<span>${esc(s.scene || when)}</span>`;
+        b.onclick = () => pickSave(s);
+        ui.saveList.appendChild(b);
+      }
+    }
+
     const first = stories.find((s) => s.id === def) || stories[0];
     if (first) pick(first);
   })
   .catch(() => { ui.premise.textContent = 'Could not load the stories.'; });
 
+function clearPicks() {
+  for (const b of ui.storyList.children) b.classList.remove('on');
+  for (const b of ui.saveList.children) b.classList.remove('on');
+}
+
 function pick(s) {
   chosenStory = s.id;
+  resumeId = null;
   ui.premise.innerHTML = `<em>${esc(s.you)}</em><br><br>${esc(s.goal)}`;
   ui.startBtn.disabled = false;
+  ui.startBtn.textContent = 'Begin';
+  clearPicks();
   for (const b of ui.storyList.children) b.classList.toggle('on', b.dataset.id === s.id);
+}
+
+function pickSave(s) {
+  resumeId = s.id;
+  chosenStory = s.storyId;
+  ui.premise.innerHTML = `<em>Carrying on from exchange ${s.turn}.</em><br><br>${esc(s.scene || '')}`;
+  ui.startBtn.disabled = false;
+  ui.startBtn.textContent = 'Carry on';
+  clearPicks();
+  for (const b of ui.saveList.children) b.classList.toggle('on', b.dataset.save === s.id);
 }
 
 ui.restart.onclick = () => location.reload();

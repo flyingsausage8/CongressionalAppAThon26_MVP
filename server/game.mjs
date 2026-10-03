@@ -47,9 +47,22 @@ Every character except the narrator introduces themselves by name, out loud and 
 Not a formal announcement - the way a real person does it: "Odo. Thirty years on this road." For a spare voice, put the character's name in the "as" field on every line they speak.
 The narrator is an unseen voice telling the tale. The narrator has no name, never refers to itself, and never introduces itself.
 
-NARRATION
-The narrator may run long: two to four sentences, up to about sixty words. Put the listener somewhere - weather, light, sound, the feel of a place. Take your time.
-Spoken character lines stay under thirty words. Short lines sound alive.
+HOW THIS SOUNDS - the listener is driving and only hears this once
+Write for the ear, not the page. Plain, everyday words. No fancy writing.
+- Short sentences. One idea each. If a sentence has a semicolon or three things in a row, break it up.
+- Narrator lines under 25 words. Character lines under 20 words.
+- Keep the whole turn around 70 words. Move fast. Something should change every single exchange.
+- Concrete things the listener can picture instantly: a gate, a lantern, a wet rope, a cold hand.
+- At most ONE new name, object or fact per exchange. Never pile them up.
+- No describing two things at once. Say what happened, then what someone did about it.
+
+ALWAYS SAY WHO IS ABOUT TO SPEAK
+The listener cannot see a screen and will lose track of who is talking.
+Before anyone speaks, their name must already have been said out loud in the line just before - normally the narrator doing something small with them.
+  narrator: "Odo stops walking."
+  odo: "We're being followed."
+If the same person speaks twice in a row, you do not need to name them again.
+A character's very first line also includes their own name, so the listener hears it twice.
 
 CONDITIONS
 Everyone, including the listener, has a condition written as plain prose - "knee aching, pretending otherwise", not a label from a list.
@@ -67,8 +80,8 @@ The final line of every turn is the state, and it is never spoken:
 HARD RULES
 1. The FIRST line must be under 10 words. Always - it is spoken before you finish writing.
 2. One JSON object per line, ending with a newline. Never wrap in an array or a code fence.
-3. Three to six spoken lines, then exactly one state line. The state line is always last.
-4. Every turn except the final one ends with something the listener can answer out loud - a question, a choice, or a situation that demands a response.
+3. Four to six spoken lines, then exactly one state line. The state line is always last.
+4. Every turn except the final one ends with ONE clear question offering at most two concrete choices the listener can answer out loud. Name the choices in plain words. Never offer three or more options, and never ask something abstract.
 5. Never use a voice slot that is not listed above. There are no sound effects.
 6. Omit any state field that has not changed. "ending" is only true on the turn that actually ends the story.
 7. "tone" is required on every spoken line: a few plain-English words of acting direction for this line specifically, like "quiet, hedging, won't meet your eye". Never reuse the character's general style as the tone.
@@ -112,6 +125,7 @@ export class Session {
     this.history = [];
     this.turn = 0;
     this.done = false;
+    this.maxTurns = this.story.maxTurns;
 
     this.state = {
       scene: this.story.opening,
@@ -124,6 +138,34 @@ export class Session {
       learned: [],
       seen: [],
     };
+  }
+
+  /** Everything needed to pick this story back up later. */
+  snapshot() {
+    return {
+      storyId: this.story.id,
+      turn: this.turn,
+      done: this.done,
+      maxTurns: this.maxTurns,
+      state: this.state,
+      history: this.history,
+    };
+  }
+
+  /**
+   * Rebuilds a session from a snapshot. A finished story gets a fresh budget
+   * of exchanges so it can carry on past its ending.
+   */
+  static restore(snap) {
+    const s = new Session(snap.storyId);
+    s.turn = snap.turn || 0;
+    s.history = Array.isArray(snap.history) ? snap.history : [];
+    s.maxTurns = snap.maxTurns || s.story.maxTurns;
+    s.state = { ...s.state, ...(snap.state || {}) };
+    s.state.cast = { ...s.state.cast, ...(snap.state?.cast || {}) };
+    s.done = false;
+    if (snap.done || s.turn >= s.maxTurns) s.maxTurns = s.turn + s.story.softTurns;
+    return s;
   }
 
   /** Conditions persist; only what the model actually sends gets rewritten. */
@@ -187,7 +229,8 @@ export class Session {
 
   direction(nudge) {
     const n = this.turn + 1;
-    const { softTurns, maxTurns } = this.story;
+    const maxTurns = this.maxTurns;
+    const softTurns = Math.min(this.story.softTurns, maxTurns - 2);
     const forced = n >= maxTurns;
 
     let note = `[STATE]\n${this.stateBlock()}\n\n[DIRECTOR] Exchange ${n}.`;
@@ -212,13 +255,20 @@ export class Session {
     return note;
   }
 
-  context(said, nudge) {
+  context(said, nudge, resumed) {
     const msgs = [{ role: 'system', content: systemPrompt(this.story) }];
     for (const h of this.history.slice(-HISTORY_LINES)) msgs.push(h);
 
     const dir = this.direction(nudge);
     if (this.turn === 0) {
       msgs.push({ role: 'user', content: `${dir}\n\nOpen the story. Put us here: ${this.story.opening}` });
+    } else if (resumed) {
+      msgs.push({
+        role: 'user',
+        content:
+          `${dir}\n\nThe listener has just come back after a break. Pick the story up exactly where it stopped. ` +
+          'Open with one short line reminding them where they are and who is here, then carry straight on and end with a choice.',
+      });
     } else if (nudge) {
       msgs.push({ role: 'user', content: dir });
     } else {
@@ -231,9 +281,9 @@ export class Session {
    * One turn. Script lines stream out and TTS fires the moment each line lands,
    * without waiting for the model to finish - that is where the speed comes from.
    */
-  async takeTurn({ said, nudge, emit }) {
+  async takeTurn({ said, nudge, resumed, emit }) {
     const t0 = performance.now();
-    const msgs = this.context(said, nudge);
+    const msgs = this.context(said, nudge, resumed);
     if (said) this.history.push({ role: 'user', content: `You say: "${said}"` });
 
     let buf = '';
@@ -290,7 +340,7 @@ export class Session {
     }
 
     this.turn++;
-    if (this.turn >= this.story.maxTurns) this.done = true;
+    if (this.turn >= this.maxTurns) this.done = true;
 
     emit({
       t: 'turnEnd',
@@ -298,7 +348,7 @@ export class Session {
       done: this.done,
       turn: this.turn,
       soft: this.story.softTurns,
-      max: this.story.maxTurns,
+      max: this.maxTurns,
       scene: this.state.scene,
       state: this.state,
       firstAudioMs: firstAudioAt,
