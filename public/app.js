@@ -18,6 +18,7 @@ const SETTLE_MS = 1000;      // driver mode: one second of quiet means they have
 const MIC_GAP_MS = 100;      // fallback only; the real speaker lag is measured, see speakerLagMs()
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
+let starting = false;        // a microphone is being opened right now; do not open a second
 let storyOver = false;
 let chosenStory = null;
 let resumeId = null;
@@ -44,6 +45,7 @@ const driver = {
   settle: null,
   wait: null,
   urges: 0,
+  micGen: 0,        // which microphone attempt is live; stale callbacks compare against it
 };
 
 const STOP_WORDS = /\b(stop|pause|wait|hold on|quiet|shush)\b/i;
@@ -694,22 +696,28 @@ async function initSpeech() {
 
 /** Driver mode: one recogniser, opened once, never closed until the story ends. */
 async function startAlwaysListening() {
-  if (listening || !speechCfg) return;
+  if (listening || starting || !speechCfg) return;
+  starting = true;
   const SDK = window.SpeechSDK;
+  // Everything below belongs to this attempt. If a newer attempt starts, or this one is
+  // torn down, the number moves on and every stale callback below becomes a no-op.
+  const gen = ++driver.micGen;
+  const stale = () => gen !== driver.micGen;
 
   // Ask the browser for an echo-cancelled stream. Without this the microphone hears the
   // characters through the speakers and we submit the story's own words as your answer.
   let audioCfg;
   try {
-    if (driver.useDefaultInput) throw new Error('forced default input');
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
+    if (stale()) { stream.getTracks().forEach((t) => t.stop()); starting = false; return; }
     driver.stream = stream;
     audioCfg = SDK.AudioConfig.fromStreamInput(stream);
-    watchLevel(stream);
+    watchLevel(stream, gen);
   } catch (err) {
     micReport('no-echo-cancel', String(err?.message || err));
+    if (stale()) { starting = false; return; }
     driver.stream = null;
     audioCfg = SDK.AudioConfig.fromDefaultMicrophoneInput();
   }
@@ -719,11 +727,13 @@ async function startAlwaysListening() {
   driver.lastEventAt = Date.now();
 
   recognizer.recognizing = (_s, e) => {
+    if (stale()) return;
     driver.lastEventAt = Date.now();
     if (!driver.sawInterim) { driver.sawInterim = true; micReport('hearing', String(e.result.text || '').slice(0, 60)); }
     driverHeard(e.result.text || '', false, startOf(e));
   };
   recognizer.recognized = (_s, e) => {
+    if (stale()) return;
     driver.lastEventAt = Date.now();
     if (e.result.reason === SDK.ResultReason.RecognizedSpeech && e.result.text) {
       driverHeard(e.result.text, true, startOf(e));
@@ -731,24 +741,27 @@ async function startAlwaysListening() {
       micReport('no-match', `phase ${driver.phase}`);     // heard sound, made no words of it
     }
   };
-  recognizer.speechStartDetected = () => { driver.lastEventAt = Date.now(); };
+  recognizer.speechStartDetected = () => { if (!stale()) driver.lastEventAt = Date.now(); };
   recognizer.sessionStarted = () => {
+    if (stale()) return;
     driver.micT0 = Date.now();
     driver.lastEventAt = Date.now();
     micReport('started');
   };
   recognizer.canceled = (_s, e) => {
+    if (stale()) return;                     // a recogniser we already replaced
     micReport('canceled', e?.errorDetails || `reason ${e?.reason}`);
-    relisten();
+    relisten(gen);
   };
   recognizer.sessionStopped = () => {
+    if (stale()) return;                     // likewise: never tear down its replacement
     micReport('stopped');
-    relisten();
+    relisten(gen);
   };
 
   recognizer.startContinuousRecognitionAsync(
-    () => { listening = true; micReport('ready'); },
-    (err) => { micReport('start-failed', String(err)); relisten(); },
+    () => { if (stale()) return; listening = true; starting = false; micReport('ready'); },
+    (err) => { if (stale()) return; starting = false; micReport('start-failed', String(err)); relisten(gen); },
   );
   listening = true;
   ui.driverBar.hidden = false;
@@ -781,7 +794,7 @@ function flushMicBacklog() {
 
 /* Is the microphone actually carrying sound? The recogniser can sit there silently doing
    nothing, and without this we cannot tell a dead mic from a deaf transcriber. */
-function watchLevel(stream) {
+function watchLevel(stream, gen) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const node = ctx.createAnalyser();
@@ -793,6 +806,7 @@ function watchLevel(stream) {
 
     clearInterval(driver.levelTimer);
     driver.levelTimer = setInterval(() => {
+      if (gen !== driver.micGen) { clearInterval(driver.levelTimer); return; }
       node.getByteTimeDomainData(buf);
       let peak = 0;
       for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
@@ -802,19 +816,14 @@ function watchLevel(stream) {
     }, 100);
 
     // Every few seconds while we are waiting, say whether sound is arriving at all.
+    // This only reports. It must never rebuild the microphone: an earlier version did,
+    // and it tore down a perfectly good one mid-answer, leaving the driver unheard.
     clearInterval(driver.levelReport);
     driver.levelReport = setInterval(() => {
+      if (gen !== driver.micGen) { clearInterval(driver.levelReport); return; }
       if (driver.phase !== 'answering') { driver.peak = 0; return; }
       const track = stream.getAudioTracks()[0];
       micReport('level', `peak ${driver.peak} ctx ${ctx.state} track ${track?.readyState} muted ${track?.muted}`);
-      // Sound is reaching us but the transcriber has produced nothing. The stream feed is
-      // broken, not the microphone - rebuild on the browser's default input instead.
-      if (driver.peak > 10 && !driver.sawInterim && Date.now() - driver.quietSince > 7000) {
-        micReport('deaf', 'sound but no words - falling back to default microphone input');
-        driver.useDefaultInput = true;
-        relisten();
-        return;
-      }
       driver.peak = 0;
     }, 4000);
 
@@ -835,10 +844,17 @@ function startOf(e) {
   return Number.isFinite(off) && off > 0 ? driver.micT0 + off / 10000 : 0;
 }
 
-/** The mic must never quietly die on a driver. */
-function relisten() {
+/**
+ * The mic must never quietly die on a driver. Callers pass the generation they belong to:
+ * a recogniser that has already been replaced must not tear down its replacement, which is
+ * exactly how a working microphone ended up feeding a stopped stream and hearing nothing.
+ */
+function relisten(gen) {
   if (!driver.on || storyOver) return;
+  if (gen !== undefined && gen !== driver.micGen) return;
+  driver.micGen++;                           // every callback from the old one is now dead
   listening = false;
+  starting = false;
   clearInterval(driver.levelTimer);
   clearInterval(driver.levelReport);
   try { driver.audioCtx?.close(); } catch { /* ignore */ }
@@ -858,7 +874,7 @@ function relisten() {
  */
 setInterval(() => {
   if (!driver.on || storyOver) return;
-  if (!listening) { startAlwaysListening(); return; }
+  if (!listening && !starting) { startAlwaysListening(); return; }
   const track = driver.stream?.getAudioTracks?.()[0];
   if (track && track.readyState !== 'live') {
     micReport('track-ended', `readyState ${track.readyState}`);
@@ -868,7 +884,9 @@ setInterval(() => {
 
 function stopAlwaysListening() {
   if (!driver.on || !recognizer) return;
+  driver.micGen++;
   listening = false;
+  starting = false;
   const r = recognizer;
   recognizer = null;
   r.stopContinuousRecognitionAsync(() => r.close(), () => r.close());
