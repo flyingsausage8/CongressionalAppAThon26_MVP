@@ -1,24 +1,24 @@
 {
-  "title": "The Long Way Round",
-  "premise": "It is past midnight. You are driving a mountain forest road to your grandmother's house with a box of groceries and her medication on the back seat. Phone signal comes and goes. The CB radio picks up a logging trucker called Hunter, and sometimes a friendly stranger on channel nine who seems very interested in where you are going.",
-  "goal": "Keep the driver talking, choosing, and awake until they reach the house at dawn.",
+  "title": "Red and the Long Way Through the Wood",
+  "premise": "You are Red, carrying a basket of bread, honey and medicine to your grandmother's cottage on the far side of the forest. It is a bright, cool morning. There is a path. There is also a wolf who would very much like to walk with you and talk.",
+  "goal": "Tell a good story out loud, and keep the listener answering back so they stay alert and awake.",
   "rules": [
-    "This is Little Red Riding Hood retold as a night drive. The old beats are there - the path, the shortcut, the stranger who asks where you are going, the house where someone is waiting, the questions about eyes and ears and teeth - but never name the fairy tale and never let a character notice they are in one.",
-    "The driver is ALWAYS driving. Never strand them, crash them, or end the drive.",
-    "Nothing supernatural is ever confirmed. Every strange thing has a plain explanation that never quite fits.",
-    "The wolf is never openly menacing. His danger is that he is good company and his advice is always slightly convenient for him.",
-    "Characters react to what the driver actually said. If the driver says something unexpected, follow it rather than forcing the plot.",
-    "Never describe the driver's own actions in detail - they decide those. Describe the world reacting.",
-    "Recurring choice: stay on the long marked road, or take the shortcut someone has recommended. Keep offering it in new forms.",
-    "Every turn must end with an open question or a real fork. Never a dead end."
+    "This is Little Red Riding Hood told warmly, like a tale read aloud. Adventure and mischief, not horror. Never frightening, never gory, never threatening to the listener.",
+    "The wolf is a charming trickster, not a predator. He schemes, flatters, and gets caught out. Nobody is ever eaten. Nobody is ever hurt on the page.",
+    "The listener IS Red. Address them as 'you'. They choose what Red says and does.",
+    "Keep the tone bright and companionable. Humour is welcome. Wonder is welcome. Dread is not.",
+    "Characters react to what the listener actually said. If they say something unexpected or silly, roll with it happily rather than forcing the plot back.",
+    "Never describe Red's own choices for her - describe the world, and let the listener decide.",
+    "Keep the classic beats available: the path and the shortcut, the flowers, the stranger who asks where you are going, the cottage, the famous questions about eyes and ears and teeth - but play them light.",
+    "Every turn must end with a question or a real choice the listener can answer out loud. Never a dead end."
   ],
-  "openingBeat": "Headlights on wet pine. The turnoff for the forest road is coming up, and the radio has just gone quiet mid-song.",
+  "openingBeat": "Morning sun through the trees, the basket heavier than it looks, and the first fork in the path already in sight.",
   "sfx": [
-    "turn_signal",
-    "radio_static",
-    "engine_rumble",
-    "rumble_strip",
-    "thunder",
-    "horn_distant"
+    "birdsong",
+    "footsteps_leaves",
+    "wind_in_trees",
+    "brook",
+    "door_knock",
+    "basket_rustle"
   ]
 }

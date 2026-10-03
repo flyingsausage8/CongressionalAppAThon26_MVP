@@ -3,9 +3,9 @@
 import { WebSocket } from 'ws';
 
 const REPLIES = [
-  'I stay on the main road. Who is this on channel nine?',
-  'Hunter, you still there? That guy keeps telling me to take the shortcut.',
-  'Grandma, you sound different tonight. Did you leave the porch light on like always?',
+  'I stay on the path. Who are you, exactly?',
+  'I pick some flowers for Grandma, but I keep walking.',
+  'Grandma, what big eyes you have! Have you been up all night gardening again?',
 ];
 
 const ws = new WebSocket('ws://localhost:3000/ws');

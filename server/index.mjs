@@ -86,8 +86,8 @@ wss.on('connection', (ws) => {
     } catch {
       return;
     }
-    if (msg.t === 'start') run({ driverSaid: null });
-    else if (msg.t === 'say' && msg.text?.trim()) run({ driverSaid: msg.text.trim() });
+    if (msg.t === 'start') run({ said: null });
+    else if (msg.t === 'say' && msg.text?.trim()) run({ said: msg.text.trim() });
     else if (msg.t === 'idle') run({ nudge: true });
   });
 });

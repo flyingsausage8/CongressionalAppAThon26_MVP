@@ -7,7 +7,7 @@ const ui = {
   form: $('typeForm'), input: $('typeInput'), nudge: $('nudge'),
 };
 
-const SFX_NAMES = ['turn_signal', 'radio_static', 'engine_rumble', 'rumble_strip', 'thunder', 'horn_distant'];
+const SFX_NAMES = ['birdsong', 'footsteps_leaves', 'wind_in_trees', 'brook', 'door_knock', 'basket_rustle'];
 const IDLE_MS = 25000;
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
@@ -268,7 +268,7 @@ function stopListening() {
 fetch('/api/cast')
   .then((r) => r.json())
   .then((d) => { ui.premise.textContent = d.story.premise; })
-  .catch(() => { ui.premise.textContent = 'Night drive. Two lanes. Nobody else out here.'; });
+  .catch(() => { ui.premise.textContent = 'A basket, a forest path, and a wolf who would like a word.'; });
 
 // preload sound effects so they fire with zero network delay
 for (const n of SFX_NAMES) {

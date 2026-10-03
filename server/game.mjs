@@ -10,7 +10,7 @@ const HISTORY_LINES = 18;
 
 function systemPrompt() {
   const who = VOICES.map((k) => `- ${k} (${cast[k].style}) ${cast[k].bio}`).join('\n');
-  return `You are the story engine for "${story.title}", a voice-only game played by someone driving at night.
+  return `You are the storyteller for "${story.title}", a voice-only story told to someone who is driving and needs to stay awake. They cannot look at a screen. They listen, and they answer out loud.
 
 PREMISE
 ${story.premise}
@@ -37,8 +37,8 @@ HARD RULES
 2. One JSON object per line, ending with a newline. Never wrap in an array or code fence.
 3. Write 3 to 5 lines per turn. Never more.
 4. Keep every line under 30 words. Short lines sound alive; long ones drag.
-5. "tone" is plain-English direction for the voice actor, e.g. "quiet, suspicious, half-smiling".
-6. End the turn with a question or a fork the driver can answer out loud.
+5. "tone" is plain-English direction for the voice actor, e.g. "warm, teasing, unhurried".
+6. End the turn with a question or a choice the listener can answer out loud.
 7. Never use a voice or sfx name not listed above.`;
 }
 
@@ -64,21 +64,21 @@ export class Session {
     this.turn = 0;
   }
 
-  context(driverSaid, nudge) {
+  context(said, nudge) {
     const msgs = [{ role: 'system', content: systemPrompt() }];
     for (const h of this.history.slice(-HISTORY_LINES)) msgs.push(h);
 
     if (this.turn === 0) {
-      msgs.push({ role: 'user', content: `Open the story. Beat to hit: ${story.openingBeat}` });
+      msgs.push({ role: 'user', content: `Begin the tale. Beat to hit: ${story.openingBeat}` });
     } else if (nudge) {
       msgs.push({
         role: 'user',
         content:
-          'The driver has gone quiet and may be drifting off. Escalate NOW: a sudden sound, ' +
-          'a character raising their voice, a direct question they must answer. Make it jolting, not scary.',
+          'The listener has gone quiet. Gently pull them back in: a character asks them something ' +
+          'directly, or something small and surprising happens. Keep it warm and inviting, never alarming.',
       });
     } else {
-      msgs.push({ role: 'user', content: `The driver says: "${driverSaid}"` });
+      msgs.push({ role: 'user', content: `You say: "${said}"` });
     }
     return msgs;
   }
@@ -87,10 +87,10 @@ export class Session {
    * Runs one turn. Streams script lines out and fires TTS the moment each line lands,
    * without waiting for the model to finish - that is where the speed comes from.
    */
-  async takeTurn({ driverSaid, nudge, emit }) {
+  async takeTurn({ said, nudge, emit }) {
     const t0 = performance.now();
-    const msgs = this.context(driverSaid, nudge);
-    if (driverSaid) this.history.push({ role: 'user', content: `The driver says: "${driverSaid}"` });
+    const msgs = this.context(said, nudge);
+    if (said) this.history.push({ role: 'user', content: `You say: "${said}"` });
 
     let buf = '';
     let idx = 0;
