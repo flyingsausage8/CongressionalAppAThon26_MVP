@@ -14,7 +14,6 @@ const ui = {
 const IDLE_MS = 25000;       // hands-on mode: how long before we prod you
 const ANSWER_MS = 5000;      // driver mode: how long a question waits before we ask again
 const SETTLE_MS = 1300;      // driver mode: silence that means "they have finished talking"
-const MIC_DEAD_MS = 25000;   // driver mode: no microphone events at all means it has died
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
 let storyOver = false;
@@ -35,6 +34,7 @@ const driver = {
   lastPlayEnd: 0,   // wall clock of the last audio frame we played
   micT0: 0,         // wall clock of when the recogniser session started
   lastEventAt: 0,   // last sign of life from the microphone
+  stream: null,     // the live microphone track, so we can tell if it really died
   settle: null,
   wait: null,
   urges: 0,
@@ -138,13 +138,6 @@ function urgeAgain() {
   driver.urges++;
   driverHint('Still with us?', 'think');
   ws.send(JSON.stringify({ t: 'idle', level: driver.urges }));
-
-  // If the microphone has shown no sign of life across several asks, it is not that they
-  // are quiet - it has stopped working. Say so, and bring it back.
-  if (driver.urges >= 2 && Date.now() - driver.lastEventAt > ANSWER_MS * 2) {
-    micReport('unresponsive', `${driver.urges} asks with no microphone activity`);
-    relisten();
-  }
 }
 
 /** Everything the mic hears while driver mode is on comes through here. */
@@ -566,9 +559,11 @@ async function startAlwaysListening() {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
+    driver.stream = stream;
     audioCfg = SDK.AudioConfig.fromStreamInput(stream);
   } catch (err) {
     micReport('no-echo-cancel', String(err?.message || err));
+    driver.stream = null;
     audioCfg = SDK.AudioConfig.fromDefaultMicrophoneInput();
   }
 
@@ -602,12 +597,23 @@ async function startAlwaysListening() {
   };
 
   recognizer.startContinuousRecognitionAsync(
-    () => { listening = true; },
+    () => { listening = true; micReport('ready'); },
     (err) => { micReport('start-failed', String(err)); relisten(); },
   );
   listening = true;
   ui.driverBar.hidden = false;
   driverHint('Listening');
+
+  // Resolve once the service has actually accepted us, so nothing is spoken into a void.
+  await new Promise((done) => {
+    const t = setTimeout(done, 4000);
+    const started = recognizer.sessionStarted;
+    recognizer.sessionStarted = (s, e) => {
+      clearTimeout(t);
+      started?.(s, e);
+      done();
+    };
+  });
 }
 
 /** Tell the server, so microphone trouble shows up in the transcript. */
@@ -629,15 +635,22 @@ function relisten() {
   const old = recognizer;
   recognizer = null;
   try { old?.close(); } catch { /* already gone */ }
+  try { driver.stream?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+  driver.stream = null;
   setTimeout(() => { if (driver.on && !storyOver && !listening) startAlwaysListening(); }, 600);
 }
 
-/** Nothing from the microphone for a long time means it died, not that you went quiet. */
+/**
+ * Is the microphone genuinely dead? Silence is not evidence - a thinking driver makes no
+ * sound at all. Only the audio track actually ending counts, so we never tear down a
+ * working microphone and swallow the answer being spoken into it.
+ */
 setInterval(() => {
   if (!driver.on || storyOver) return;
   if (!listening) { startAlwaysListening(); return; }
-  if (Date.now() - driver.lastEventAt > MIC_DEAD_MS) {
-    micReport('no-events', `${Math.round((Date.now() - driver.lastEventAt) / 1000)}s silent, restarting`);
+  const track = driver.stream?.getAudioTracks?.()[0];
+  if (track && track.readyState !== 'live') {
+    micReport('track-ended', `readyState ${track.readyState}`);
     relisten();
   }
 }, 5000);
@@ -774,7 +787,9 @@ ui.startBtn.onclick = async () => {
   if (driver.on) {
     ui.micBtn.hidden = true;               // hands free: there is nothing to hold
     ui.form.hidden = true;
-    startAlwaysListening();
+    // Wait for the microphone to be genuinely open before a word is spoken, or the first
+    // answer lands in a recogniser that is still connecting and is lost.
+    await startAlwaysListening();
   }
   if (micOk && !driver.on) ui.driverBar.hidden = true;
 

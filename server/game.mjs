@@ -44,8 +44,22 @@ ${spare ? `\nSPARE VOICES\n${spare}` : ''}
 
 HOW CHARACTERS ARRIVE
 Every character except the narrator introduces themselves by name, out loud and naturally, the first time they speak in the story.
-Not a formal announcement - the way a real person does it: "Odo. Thirty years on this road." For a spare voice, put the character's name in the "as" field on every line they speak.
+Say the name, then who they are to the listener, then one thing that makes them a person. Warm, not a roll call:
+  "Odo. Thirty years carrying messages on this road. You can lean on me, but not quickly."
+A bare "Odo." is not enough - the listener has no screen and will never see the name written down.
+For a spare voice, put the character's name in the "as" field on every line they speak.
 The narrator is an unseen voice telling the tale. The narrator has no name, never refers to itself, and never introduces itself.
+
+THE OPENING - you only get one chance to set this up
+By the end of the first exchange the listener must know all five of these, said out loud:
+  1. Where they are and what time of day it is.
+  2. What they are carrying, holding, or responsible for.
+  3. Who is with them - each by name, with a line about who they are.
+  4. What they are trying to do, and why it cannot wait.
+  5. What stands in the way right now.
+Take your time here. The first exchange may run longer than the rest - up to about 120 words.
+Still short sentences, still plain words, still one idea at a time. Lay it out so a half-asleep
+listener could repeat the situation back to you. Then ask the first question.
 
 HOW THIS SOUNDS - the listener is driving and only hears this once
 Write for the ear, not the page. Plain, everyday words. No fancy writing.
@@ -90,7 +104,7 @@ The final line of every turn is the state, and it is never spoken:
 HARD RULES
 1. The FIRST line must be under 10 words. Always - it is spoken before you finish writing.
 2. One JSON object per line, ending with a newline. Never wrap in an array or a code fence.
-3. Four to six spoken lines, then exactly one state line. The state line is always last.
+3. Four to six spoken lines, then exactly one state line. The state line is always last. The opening exchange may run to eight.
 4. Every turn except the final one ends with ONE direct question, spoken to the listener in the second person, offering exactly two concrete choices they can answer out loud. Where a choice has a real trade-off, give each option a quick upside and downside in the same line. The question is the last thing said. Never offer three or more options, and never ask something abstract.
 5. Never use a voice slot that is not listed above. There are no sound effects.
 6. Omit any state field that has not changed. "ending" is only true on the turn that actually ends the story.
@@ -277,7 +291,14 @@ export class Session {
 
     const dir = this.direction(nudge);
     if (this.turn === 0) {
-      msgs.push({ role: 'user', content: `${dir}\n\nOpen the story. Put us here: ${this.story.opening}` });
+      msgs.push({
+        role: 'user',
+        content:
+          `${dir}\n\nOpen the story. Put us here: ${this.story.opening}\n\n` +
+          'This is the introduction, so follow THE OPENING exactly. Cover all five points out loud, ' +
+          'introduce everyone who is present by name, make the goal and the urgency unmistakable, ' +
+          'and only then ask the first question. Six to eight spoken lines for this exchange.',
+      });
     } else if (resumed) {
       msgs.push({
         role: 'user',
