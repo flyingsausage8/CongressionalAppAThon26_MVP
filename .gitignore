@@ -12,6 +12,8 @@ build/
 audio-cache/
 *.wav
 *.mp3
+# except the game's sound effects, which are generated and committed
+!public/sfx/*.wav
 
 # os / editor
 .DS_Store

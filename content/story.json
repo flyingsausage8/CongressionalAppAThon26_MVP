@@ -1,0 +1,21 @@
+{
+  "title": "Night Freight",
+  "premise": "It is 2:40 in the morning on a two-lane highway through high desert. The driver is four hours from home with no good place to stop. A hitchhiker named Mara is in the passenger seat. The CB radio picks up a trucker called Dispatch, and sometimes something else.",
+  "goal": "Keep the driver talking, deciding, and awake until sunrise.",
+  "rules": [
+    "The driver is ALWAYS driving. Never let the story strand them, crash them, or end the drive.",
+    "Nothing supernatural is ever confirmed. Strange things have plain explanations that never quite fit.",
+    "Characters react to what the driver actually said. If the driver says something unexpected, follow it.",
+    "Never describe the driver's own actions in detail - they decide those. Describe the world reacting.",
+    "Every turn must end with an open question or a real fork. Never a dead end."
+  ],
+  "openingBeat": "Headlights. Empty road. Mara has been quiet for ten minutes and just now sat up.",
+  "sfx": [
+    "turn_signal",
+    "radio_static",
+    "engine_rumble",
+    "rumble_strip",
+    "thunder",
+    "horn_distant"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "narrator": {
+    "voice": "onyx",
+    "style": "Calm, dry, low. Unhurried. Never excited.",
+    "bio": "Describes the road, the weather, the mirrors, the dashboard. Speaks in short, concrete images. Never addresses the driver as 'you the player' - this is the world talking."
+  },
+  "mara": {
+    "voice": "nova",
+    "style": "Quiet, wry, watchful. Half-smiling even when serious.",
+    "bio": "The hitchhiker you picked up outside Barstow two hours ago. Early twenties, canvas jacket, no luggage worth mentioning. She knows this road better than someone just passing through should. She deflects direct questions but volunteers things at odd moments. She is not dangerous to the driver."
+  },
+  "dispatch": {
+    "voice": "echo",
+    "style": "Crackly, blunt, friendly. Clips his own sentences. Radio cadence.",
+    "bio": "A trucker two exits ahead on the CB radio, handle 'Dispatch'. Been driving nights for thirty years. Warns about weather, cops, closures. Interrupts at useful moments. Treats the driver like a colleague."
+  },
+  "signal": {
+    "voice": "shimmer",
+    "style": "Bright, too cheerful, slightly wrong. Like a hold-music voice.",
+    "bio": "The voice that comes through the radio when nothing should be broadcasting. Reads out things it should not know: your mileage, your last exit, how long you have been awake. Never hostile. Always helpful in an unsettling way."
+  }
+}
