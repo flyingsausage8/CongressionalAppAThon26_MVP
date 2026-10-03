@@ -14,7 +14,7 @@ const ui = {
 const IDLE_MS = 25000;       // hands-on mode: how long before we prod you
 const ANSWER_MS = 5000;      // driver mode: how long a question waits before we ask again
 const SETTLE_MS = 1200;      // driver mode: silence that means "they have finished talking"
-const MIC_GAP_MS = 100;      // driver mode: let the speakers finish ringing out before we listen
+const MIC_GAP_MS = 100;      // fallback only; the real speaker lag is measured, see speakerLagMs()
 
 let ws, speechCfg, recognizer, listening = false, idleTimer = null;
 let storyOver = false;
@@ -37,6 +37,7 @@ const driver = {
   utterStart: 0,    // wall clock of when the current run of speech began
   askedAt: 0,       // wall clock of when the question finished, so we can time the answer
   gap: null,        // the deliberate stretch of microphone silence between turns
+  gapMs: MIC_GAP_MS, // how long that gap needs to be on this device
   lastEventAt: 0,   // last sign of life from the microphone
   stream: null,     // the live microphone track, so we can tell if it really died
   settle: null,
@@ -149,6 +150,20 @@ function micEnabled(on) {
   return !!track;
 }
 
+/**
+ * How far the speakers lag behind the code. We do not have to guess this: the browser
+ * measures it. "ended" fires when the audio element has handed over its last sample, but
+ * that sample is still sitting in the sound card's buffer - outputLatency is exactly how
+ * long it takes to come out of the speaker. Bluetooth can be ten times a laptop speaker,
+ * which is why a fixed number would be wrong on half the devices.
+ */
+function speakerLagMs() {
+  const ctx = driver.audioCtx;
+  const sec = Number(ctx?.outputLatency) || Number(ctx?.baseLatency) || 0;
+  if (!sec) return MIC_GAP_MS;
+  return Math.min(500, Math.max(40, Math.round(sec * 1000) + 30));   // + a little for the room
+}
+
 /** The story is talking. Nothing you say matters except "stop". */
 function driverTelling() {
   if (!driver.on) return;
@@ -161,11 +176,11 @@ function driverTelling() {
 }
 
 /**
- * The characters have stopped. The audio element reports "finished" a moment before the
- * sound has actually left the speakers, so cut the microphone for a tenth of a second and
- * let that tail pass. Only then does anything heard count as an answer. The microphone
- * stays open the whole time the story is talking, so "stop" and "resume" still work - it
- * is only this last sliver, after the final line, that is muted.
+ * The characters have stopped. The audio element reports "finished" while its last sample
+ * is still travelling through the sound card, so cut the microphone until that sound has
+ * genuinely left the speakers - a delay the browser measures for us. Only then does what we
+ * hear count as an answer. The microphone stays open the whole time the story is talking,
+ * so "stop" and "resume" still work; it is only this last sliver that is muted.
  */
 function driverAwaitAnswer() {
   if (!driver.on || storyOver) return;
@@ -174,11 +189,12 @@ function driverAwaitAnswer() {
   driver.buffer = '';
   driverHint('\u2026');
 
+  driver.gapMs = speakerLagMs();
   if (!micEnabled(false)) return beginAnswering();     // no track to cut, nothing to wait for
   driver.gap = setTimeout(() => {
     micEnabled(true);
     beginAnswering();
-  }, MIC_GAP_MS);
+  }, driver.gapMs);
 }
 
 function beginAnswering() {
@@ -226,7 +242,7 @@ function driverHeard(text, final, startMs) {
 
   // Did this speech begin while the characters were still sounding? The microphone is cut
   // for MIC_GAP_MS after the last line, so anything starting before that is theirs, not yours.
-  const overlapped = began < driver.lastPlayEnd + MIC_GAP_MS
+  const overlapped = began < driver.lastPlayEnd + driver.gapMs
     || (startMs ? startMs < driver.lastPlayEnd - 150 : queue.playing && !queue.paused);
 
   if (driver.phase === 'paused') {
@@ -778,6 +794,11 @@ function watchLevel(stream) {
     }, 4000);
 
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const t = stream.getAudioTracks()[0];
+    const s = t?.getSettings?.() || {};
+    micReport('audio', `echoCancellation ${s.echoCancellation} noiseSuppression ${s.noiseSuppression} ` +
+      `device "${t?.label || '?'}" speakerLag ${speakerLagMs()}ms ` +
+      `(out ${ctx.outputLatency ?? '?'} base ${ctx.baseLatency ?? '?'})`);
   } catch (err) {
     micReport('level-unavailable', String(err?.message || err));
   }
